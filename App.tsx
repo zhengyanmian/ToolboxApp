@@ -20,9 +20,42 @@ import { TOOLS, CATEGORIES } from './src/registry';
 export default function App() {
   return (
     <SafeAreaProvider>
-      <Root />
+      <ErrorBoundary>
+        <Root />
+      </ErrorBoundary>
     </SafeAreaProvider>
   );
+}
+
+/** 全局错误边界：任何页面异常显示错误卡片，而不是闪退 */
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <View style={{ flex: 1, backgroundColor: '#fff', justifyContent: 'center', padding: 24 }}>
+          <Text style={{ fontSize: 18, fontWeight: '700', color: '#b91c1c' }}>
+            页面出了点问题
+          </Text>
+          <Text style={{ color: '#6b7280', marginTop: 8, lineHeight: 20 }}>
+            {String(this.state.error?.message || this.state.error)}
+          </Text>
+          <Text
+            style={{ color: '#2563eb', marginTop: 20, fontSize: 16, fontWeight: '600' }}
+            onPress={() => this.setState({ error: null })}>
+            返回首页
+          </Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 function Root() {

@@ -1,168 +1,170 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, StatusBar } from 'react-native';
 import { Lunar } from 'lunar-typescript';
-import { C } from '../ui';
-import { setKeepScreenOn, setOrientation } from '../native';
+import { Btn } from '../ui';
+import { setKeepScreenOn, setOrientation, setImmersive } from '../native';
 
-const COLORS = [
-  { name: '白', main: '#ffffff', accent: '#9ca3af' },
-  { name: '青', main: '#22d3ee', accent: '#155e75' },
-  { name: '琥珀', main: '#fbbf24', accent: '#78350f' },
-  { name: '绿', main: '#4ade80', accent: '#14532d' },
-  { name: '粉', main: '#f472b6', accent: '#831843' },
-];
-const SIZES = [
-  { name: '小', time: 56, date: 15 },
-  { name: '中', time: 84, date: 17 },
-  { name: '大', time: 116, date: 19 },
-];
+const COLORS = ['#ffffff', '#67e8f9', '#fcd34d', '#86efac', '#f9a8d4', '#f87171'];
+const SEC_SCALE: Record<string, number> = { small: 0.35, mid: 0.6, big: 1 };
 
 export default function ScreenClock({ onBack }: { onBack: () => void }) {
   const [now, setNow] = useState(new Date());
-  const [showBar, setShowBar] = useState(true);
-  const [hour12, setHour12] = useState(false);
+  const [is24, setIs24] = useState(true);
   const [showSec, setShowSec] = useState(true);
-  const [sizeIdx, setSizeIdx] = useState(1);
-  const [colorIdx, setColorIdx] = useState(1);
-  const [landscape, setLandscape] = useState(true);
+  const [secSize, setSecSize] = useState<'small' | 'mid' | 'big'>('small');
+  const [fontSize, setFontSize] = useState(110);
+  const [portrait, setPortrait] = useState(false);
+  const [colorIdx, setColorIdx] = useState(0);
+  const [bar, setBar] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 默认横屏；离开时恢复跟随系统
   useEffect(() => {
     setOrientation('landscape');
+    setImmersive(true);
     setKeepScreenOn(true);
+    const t = setInterval(() => setNow(new Date()), 250);
     return () => {
+      clearInterval(t);
+      setImmersive(false);
       setOrientation('auto');
       setKeepScreenOn(false);
     };
   }, []);
 
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  // 选项栏自动隐藏
   const poke = () => {
-    setShowBar(true);
+    setBar(true);
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setShowBar(false), 4000);
+    hideTimer.current = setTimeout(() => setBar(false), 4000);
   };
 
-  const hh24 = now.getHours();
-  const mm = String(now.getMinutes()).padStart(2, '0');
-  const ss = String(now.getSeconds()).padStart(2, '0');
-  const h12 = hh24 % 12 === 0 ? 12 : hh24 % 12;
-  const ampm = hh24 < 12 ? 'AM' : 'PM';
-  const size = SIZES[sizeIdx];
+  const hh = now.getHours();
+  const h12 = hh % 12 === 0 ? 12 : hh % 12;
+  const main =
+    String(is24 ? hh : h12).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  const sec = String(now.getSeconds()).padStart(2, '0');
+  const lunar = Lunar.fromDate(now);
+  const dateLine = `${now.getMonth() + 1}月${now.getDate()}日 ${
+    ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][now.getDay()]
+  } · 农历${lunar.getMonthInChinese()}月${lunar.getDayInChinese()}`;
   const color = COLORS[colorIdx];
 
-  const lunarStr = useMemo(() => {
-    try {
-      const l = Lunar.fromDate(now);
-      return `${l.getYearInGanZhi()}年 ${l.getMonthInChinese()}月${l.getDayInChinese()}${
-        l.getJieQi() ? ' · ' + l.getJieQi() : ''
-      }`;
-    } catch {
-      return '';
-    }
-  }, [now.getDate()]);
-
-  const week = ['日', '一', '二', '三', '四', '五', '六'][now.getDay()];
-  const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
-    now.getDate(),
-  ).padStart(2, '0')} 星期${week}`;
-
-  const bg = '#000000';
-  const dim = '#5b6570';
+  const timeBlock = portrait ? (
+    <View style={{ alignItems: 'center' }}>
+      {main.split('').map((ch, i) => (
+        <Text
+          key={i}
+          style={[
+            st.digit,
+            {
+              color,
+              fontSize: Math.min(fontSize, 90),
+              lineHeight: Math.min(fontSize, 90) * 1.06,
+            },
+          ]}>
+          {ch}
+        </Text>
+      ))}
+      {showSec && (
+        <Text
+          style={[
+            st.digit,
+            { color, fontSize: Math.min(fontSize, 90) * SEC_SCALE[secSize], marginTop: 6 },
+          ]}>
+          {sec}
+        </Text>
+      )}
+    </View>
+  ) : (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
+      <Text style={[st.time, { color, fontSize, lineHeight: fontSize * 1.1 }]}>{main}</Text>
+      {showSec && (
+        <Text
+          style={[
+            st.sec,
+            {
+              color,
+              fontSize: fontSize * SEC_SCALE[secSize],
+              lineHeight: fontSize * SEC_SCALE[secSize] * 1.1,
+              marginBottom: fontSize * 0.12,
+            },
+          ]}>
+          {sec}
+        </Text>
+      )}
+    </View>
+  );
 
   return (
-    <View style={{ flex: 1, backgroundColor: bg }} onTouchStart={poke}>
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        {/* 顶部选项栏 */}
-        {showBar && (
-          <View style={st.bar}>
-            <OptBtn text="返回" onPress={onBack} />
-            <OptBtn
-              text={landscape ? '↻ 竖屏' : '↻ 横屏'}
+    <View style={st.root} onTouchStart={poke}>
+      <StatusBar hidden />
+      {timeBlock}
+      <Text style={[st.date, { color, opacity: 0.55 }]}>{dateLine}</Text>
+      {bar && (
+        <View style={st.bar}>
+          <View style={st.barRow}>
+            <Btn text="返回" onPress={onBack} />
+            <Btn
+              text={portrait ? '横屏' : '竖屏'}
               onPress={() => {
-                const next = !landscape;
-                setLandscape(next);
-                setOrientation(next ? 'landscape' : 'portrait');
+                const p = !portrait;
+                setPortrait(p);
+                setOrientation(p ? 'portrait' : 'landscape');
               }}
             />
-            <OptBtn
-              text={hour12 ? '12 小时' : '24 小时'}
-              onPress={() => setHour12((v) => !v)}
+            <Btn text={is24 ? '24时' : '12时'} onPress={() => setIs24(!is24)} />
+            <Btn text={showSec ? '有秒' : '无秒'} onPress={() => setShowSec(!showSec)} />
+            <Btn
+              text={`秒${secSize === 'small' ? '小' : secSize === 'mid' ? '中' : '大'}`}
+              onPress={() =>
+                setSecSize(secSize === 'small' ? 'mid' : secSize === 'mid' ? 'big' : 'small')
+              }
             />
-            <OptBtn text={showSec ? '隐藏秒' : '显示秒'} onPress={() => setShowSec((v) => !v)} />
-            <OptBtn
-              text={`字号 ${size.name}`}
-              onPress={() => setSizeIdx((i) => (i + 1) % SIZES.length)}
-            />
-            <OptBtn
-              text={`颜色 ${color.name}`}
-              onPress={() => setColorIdx((i) => (i + 1) % COLORS.length)}
-            />
+            <Btn text="颜色" onPress={() => setColorIdx((colorIdx + 1) % COLORS.length)} />
           </View>
-        )}
-
-        {/* 时钟主体 */}
-        <TouchableOpacity
-          style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
-          activeOpacity={1}
-          onPress={poke}>
-          <Text style={[st.time, { color: color.main, fontSize: size.time }]}>
-            {hour12 ? `${h12}:${mm}` : `${String(hh24).padStart(2, '0')}:${mm}`}
-            {showSec && <Text style={[st.sec, { color: color.accent, fontSize: size.time * 0.45 }]}>:{ss}</Text>}
-            {hour12 && <Text style={[st.ampm, { color: color.accent, fontSize: size.date }]}> {ampm}</Text>}
-          </Text>
-          <Text style={[st.date, { color: color.main, fontSize: size.date }]}>{dateStr}</Text>
-          {lunarStr ? (
-            <Text style={[st.lunar, { color: dim, fontSize: size.date - 3 }]}>{lunarStr}</Text>
-          ) : null}
-          {!showBar && (
-            <Text style={[st.hint, { color: dim }]}>点按屏幕呼出选项</Text>
-          )}
-        </TouchableOpacity>
-      </SafeAreaView>
+          <View style={st.barRow}>
+            <Btn text="字号−10" onPress={() => setFontSize(Math.max(40, fontSize - 10))} />
+            <Btn text="−" onPress={() => setFontSize(Math.max(40, fontSize - 1))} />
+            <Text style={st.fsLabel}>{Math.round(fontSize)}</Text>
+            <Btn text="＋" onPress={() => setFontSize(Math.min(240, fontSize + 1))} />
+            <Btn text="字号＋10" onPress={() => setFontSize(Math.min(240, fontSize + 10))} />
+          </View>
+        </View>
+      )}
     </View>
   );
 }
 
-function OptBtn(props: { text: string; onPress: () => void }) {
-  return (
-    <TouchableOpacity style={st.optBtn} onPress={props.onPress} activeOpacity={0.7}>
-      <Text style={st.optText}>{props.text}</Text>
-    </TouchableOpacity>
-  );
-}
-
 const st = StyleSheet.create({
-  bar: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    backgroundColor: '#111827dd',
-    borderRadius: 12,
-    margin: 8,
+  root: {
+    flex: 1,
+    backgroundColor: '#000',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  optBtn: {
-    backgroundColor: '#1f2937',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  time: { fontWeight: '300', fontVariant: ['tabular-nums'] },
+  digit: { textAlign: 'center', fontWeight: '300', fontVariant: ['tabular-nums'] },
+  sec: { fontWeight: '300', fontVariant: ['tabular-nums'], marginLeft: 8 },
+  date: { fontSize: 15, marginTop: 14 },
+  bar: {
+    position: 'absolute',
+    top: 10,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    gap: 8,
   },
-  optText: { color: '#e5e7eb', fontSize: 13, fontWeight: '600' },
-  time: { fontWeight: '800', fontVariant: ['tabular-nums'] },
-  sec: { fontWeight: '600' },
-  ampm: { fontWeight: '600' },
-  date: { marginTop: 14, fontWeight: '500', fontVariant: ['tabular-nums'] },
-  lunar: { marginTop: 8 },
-  hint: { fontSize: 11, marginTop: 30 },
+  barRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+  },
+  fsLabel: {
+    color: '#e5e7eb',
+    fontSize: 13,
+    minWidth: 34,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+  },
 });

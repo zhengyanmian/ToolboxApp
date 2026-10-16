@@ -48,6 +48,27 @@ import ImageScramble from './tools/imageScramble';
 import MetalDetector from './tools/metalDetector';
 import PrismTank from './tools/prismTank';
 import NcmTool from './tools/ncmTool';
+import DecisionWheel from './tools/decisionWheel';
+import FingerRoulette from './tools/fingerRoulette';
+import Scoreboard from './tools/scoreboard';
+import ReactionTest from './tools/reactionTest';
+import Danmaku from './tools/danmaku';
+import NumberToChinese from './tools/numberToChinese';
+import Rc4Tool from './tools/rc4';
+import WorkValue from './tools/workValue';
+import TimeCalc from './tools/timeCalc';
+import ImgToBase64 from './tools/imgToBase64';
+import ColorPicker from './tools/colorPicker';
+import Ruler from './tools/ruler';
+import Level from './tools/level';
+import Compass from './tools/compass';
+import NoiseMeter from './tools/noiseMeter';
+import VibratorTool from './tools/vibratorTool';
+import DeviceInfo from './tools/deviceInfo';
+import WallpaperTool from './tools/wallpaperTool';
+import WebSource from './tools/webSource';
+import IpQuery from './tools/ipQuery';
+import HistoryToday from './tools/historyToday';
 
 export type ToolDef = {
   id: string;
@@ -58,7 +79,7 @@ export type ToolDef = {
   component: React.ComponentType<{ onBack: () => void }>;
 };
 
-export const CATEGORIES = ['计算', '文本', '编码', '生成', '查询', '图片', '音频', '设备', '生活'];
+export const CATEGORIES = ['计算', '决定', '文本', '编码', '生成', '查询', '图片', '音频', '设备', '生活'];
 
 export const TOOLS: ToolDef[] = [
   { id: 'calculator', name: '计算器', icon: '🧮', category: '计算', desc: '支持函数与阶乘', component: Calculator },
@@ -77,6 +98,14 @@ export const TOOLS: ToolDef[] = [
   { id: 'roman', name: '罗马数字', icon: '🏛️', category: '计算', desc: '双向互转 1~3999', component: Roman },
   { id: 'rmb', name: '人民币大写', icon: '💴', category: '计算', desc: '票据规范大写金额', component: RmbUpper },
   { id: 'stopwatch', name: '秒表', icon: '⏲️', category: '计算', desc: '计次/分段计时', component: Stopwatch },
+  { id: 'numcn', name: '数字转中文', icon: '🀄', category: '计算', desc: '读法/大写金额', component: NumberToChinese },
+  { id: 'timecalc', name: '时间计算器', icon: '⏰', category: '计算', desc: '时刻差/加减时长', component: TimeCalc },
+  { id: 'workvalue', name: '工作性价比', icon: '💼', category: '计算', desc: '薪资通勤摸鱼换算', component: WorkValue },
+  { id: 'wheel', name: '决定转盘', icon: '🎡', category: '决定', desc: '自定义选项随机转', component: DecisionWheel },
+  { id: 'finger', name: '指尖转', icon: '👆', category: '决定', desc: '多人按屏随机抽', component: FingerRoulette },
+  { id: 'score', name: '计分板', icon: '🏆', category: '决定', desc: '多人计分本地保存', component: Scoreboard },
+  { id: 'reaction', name: '反应力测试', icon: '⚡', category: '决定', desc: '毫秒级手速检测', component: ReactionTest },
+  { id: 'danmaku', name: '手持弹幕', icon: '📣', category: '决定', desc: '全屏滚动大字', component: Danmaku },
   { id: 'text', name: '文本工具', icon: '📝', category: '文本', desc: '去重/替换/统计', component: TextTools },
   { id: 'case', name: '大小写转换', icon: '🔠', category: '文本', desc: '驼峰/下划线等', component: CaseConvert },
   { id: 'regex', name: '正则测试', icon: '🔤', category: '文本', desc: '实时匹配/标志切换', component: RegexTester },
@@ -90,6 +119,8 @@ export const TOOLS: ToolDef[] = [
   { id: 'json', name: 'JSON 格式化', icon: '🧾', category: '编码', desc: '格式化/压缩校验', component: JsonFmt },
   { id: 'hash', name: '哈希计算', icon: '#️⃣', category: '编码', desc: 'MD5/SHA1/SHA256', component: Hash },
   { id: 'unicode', name: 'Unicode/实体', icon: '🌐', category: '编码', desc: '\\u 与 HTML 实体', component: Unicode },
+  { id: 'rc4', name: 'RC4 加密', icon: '🔑', category: '编码', desc: '对称加解密/Hex/B64', component: Rc4Tool },
+  { id: 'imgb64', name: '图片转 Base64', icon: '🔡', category: '编码', desc: '生成 Data URI', component: ImgToBase64 },
   { id: 'random', name: '随机数/密码', icon: '🎲', category: '生成', desc: '随机数与强密码', component: RandomTools },
   { id: 'qr', name: '二维码生成', icon: '🔳', category: '生成', desc: '文字/链接生成码', component: QrGen },
   { id: 'color', name: '颜色转换', icon: '🎨', category: '生成', desc: 'HEX/RGB/HSL', component: ColorTool },
@@ -102,11 +133,22 @@ export const TOOLS: ToolDef[] = [
   { id: 'hotlines', name: '常用电话', icon: '☎️', category: '查询', desc: '公共服务号码速拨', component: Hotlines },
   { id: 'subnet', name: 'IP 子网计算', icon: '🌐', category: '查询', desc: '网段/广播/可用范围', component: Subnet },
   { id: 'http', name: 'HTTP 状态码', icon: '📡', category: '查询', desc: '含义速查/搜索', component: HttpStatus },
+  { id: 'websrc', name: '网页源码', icon: '📄', category: '查询', desc: '抓取状态/头部/正文', component: WebSource },
+  { id: 'ipq', name: 'IP 查询', icon: '🛰️', category: '查询', desc: '归属/运营商/ASN', component: IpQuery },
+  { id: 'hoday', name: '历史上的今天', icon: '📜', category: '查询', desc: '维基百科大事记', component: HistoryToday },
   { id: 'imgcompress', name: '图片压缩', icon: '🖼️', category: '图片', desc: '压缩/改格式/存相册', component: ImageCompress },
   { id: 'imgscramble', name: '图片混淆', icon: '🧩', category: '图片', desc: '乱序加密/同钥还原', component: ImageScramble },
-  { id: 'prism', name: '光棱坦克图片', icon: '🛡️', category: '图片', desc: '霓虹像素画生成器', component: PrismTank },
+  { id: 'prism', name: '光棱坦克图片', icon: '🛡️', category: '图片', desc: '两图合成/暗藏显影', component: PrismTank },
+  { id: 'picker', name: '取色器', icon: '💧', category: '图片', desc: '图上点按取色 HEX/RGB', component: ColorPicker },
   { id: 'ncm', name: 'NCM 音乐转换', icon: '🎵', category: '音频', desc: '本地转 MP3/FLAC', component: NcmTool },
   { id: 'metal', name: '金属探测仪', icon: '🧲', category: '设备', desc: '磁力计探测金属', component: MetalDetector },
+  { id: 'ruler', name: '尺子', icon: '📏', category: '设备', desc: '厘米刻度/横竖向', component: Ruler },
+  { id: 'level', name: '水平仪', icon: '🫧', category: '设备', desc: '气泡式倾角检测', component: Level },
+  { id: 'compass', name: '指南针', icon: '🧭', category: '设备', desc: '磁北方向/度数', component: Compass },
+  { id: 'noise', name: '噪音检测', icon: '🔊', category: '设备', desc: '麦克风分贝估算', component: NoiseMeter },
+  { id: 'vibrate', name: '振动器', icon: '📳', category: '设备', desc: '多种节奏测马达', component: VibratorTool },
+  { id: 'devinfo', name: '设备详情', icon: '🔎', category: '设备', desc: '硬件/系统/屏幕全览', component: DeviceInfo },
+  { id: 'wallpaper', name: '当前壁纸', icon: '🌄', category: '设备', desc: '导出系统壁纸', component: WallpaperTool },
   { id: 'pomodoro', name: '番茄钟', icon: '🍅', category: '生活', desc: '专注/休息循环', component: Pomodoro },
   { id: 'screenclock', name: '屏幕时钟', icon: '🕛', category: '生活', desc: '全屏时钟/常亮/农历', component: ScreenClock },
   { id: 'screen', name: '屏幕信息', icon: '📱', category: '设备', desc: '分辨率/密度/系统', component: ScreenInfo },

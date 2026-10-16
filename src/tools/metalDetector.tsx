@@ -16,44 +16,64 @@ export default function MetalDetector({ onBack }: { onBack: () => void }) {
   const lastVibe = useRef(0);
 
   useEffect(() => {
+    let stopped = false;
     const stop = startMagnetometer(150, (v) => {
+      if (stopped) return;
       if (v.error) {
-        setError('此设备没有磁力计传感器，无法使用金属探测');
+        setError(
+          v.error === 'unsupported' || v.error === 'no-sensor'
+            ? '此设备没有磁力计传感器，无法使用金属探测'
+            : `传感器异常：${v.error}`,
+        );
         return;
       }
       setError('');
       const m = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+      if (!Number.isFinite(m)) return;
       setUT(m);
       if (m > 100 && Date.now() - lastVibe.current > 1500) {
         lastVibe.current = Date.now();
-        Vibration.vibrate(120);
+        try {
+          Vibration.vibrate(120);
+        } catch {}
       }
     });
-    return stop;
+    return () => {
+      stopped = true;
+      stop();
+    };
   }, []);
 
+  const lv = uT !== null ? label(uT) : null;
   const pct = uT === null ? 0 : Math.min(100, (uT / 200) * 100);
-  const lv = uT === null ? null : label(uT);
 
   return (
     <Page id="metal" title="金属探测仪" onBack={onBack}>
       <Card style={{ alignItems: 'center', paddingVertical: 26 }}>
         {error ? (
           <Text style={st.err}>{error}</Text>
-        ) : (
+        ) : lv && uT !== null ? (
           <>
-            <Text style={[st.value, { color: lv!.color }]}>{uT!.toFixed(1)}</Text>
+            <Text style={[st.value, { color: lv.color }]}>{uT.toFixed(1)}</Text>
             <Text style={st.unit}>µT（微特斯拉）</Text>
             <View style={st.barBg}>
               <View
                 style={[
                   st.bar,
-                  { width: `${pct}%` as `${number}%`, backgroundColor: lv!.color },
+                  { width: `${pct}%` as `${number}%`, backgroundColor: lv.color },
                 ]}
               />
             </View>
-            <Text style={[st.level, { color: lv!.color }]}>{lv!.text}</Text>
+            <Text style={[st.level, { color: lv.color }]}>{lv.text}</Text>
             <Text style={st.scale}>| 0 ——— 70 ——— 120 ——— 200 µT |</Text>
+          </>
+        ) : (
+          <>
+            <Text style={[st.value, { color: C.sub }]}>--</Text>
+            <Text style={st.unit}>正在等待磁力计数据…</Text>
+            <Text style={st.hint}>
+              若长时间无读数，说明设备不带磁力计传感器（常见于部分平板/低端机）
+            </Text>
           </>
         )}
       </Card>
@@ -72,6 +92,7 @@ export default function MetalDetector({ onBack }: { onBack: () => void }) {
 const st = StyleSheet.create({
   value: { fontSize: 64, fontWeight: '800', fontVariant: ['tabular-nums'] },
   unit: { fontSize: 14, color: C.sub, marginTop: 4 },
+  hint: { fontSize: 12, color: C.sub, marginTop: 10, textAlign: 'center', lineHeight: 18 },
   barBg: {
     height: 10,
     borderRadius: 5,

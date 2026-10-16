@@ -1,49 +1,147 @@
-import { NativeModules, DeviceEventEmitter } from 'react-native';
+import { NativeModules, DeviceEventEmitter, PermissionsAndroid, Platform } from 'react-native';
 
 type ToolboxNative = {
   setKeepScreenOn(on: boolean): void;
   setOrientation(mode: 'landscape' | 'portrait' | 'auto'): void;
+  setImmersive(on: boolean): void;
   startMagnetometer(intervalMs: number): void;
-  stopMagnetometer(): void;
+  startAccelerometer(intervalMs: number): void;
+  startCompass(intervalMs: number): void;
+  stopSensors(): void;
+  vibrate(pattern: string): void;
+  cancelVibrate(): void;
+  startNoise(): Promise<boolean>;
+  getNoiseAmplitude(): Promise<number>;
+  stopNoise(): void;
+  getWallpaper(): Promise<string>;
+  getDeviceInfo(): Promise<Record<string, unknown>>;
 };
 
 const native: ToolboxNative | undefined = NativeModules.ToolboxNative as any;
 
-export function setKeepScreenOn(on: boolean): void {
-  try {
-    native?.setKeepScreenOn(on);
-  } catch {
-    // 模块不可用时静默忽略
-  }
-}
-
-export function setOrientation(mode: 'landscape' | 'portrait' | 'auto'): void {
-  try {
-    native?.setOrientation(mode);
-  } catch {
-    // 忽略
-  }
-}
-
-/** 启动磁力计监听，返回停止函数 */
-export function startMagnetometer(
-  intervalMs: number,
-  cb: (v: { x: number; y: number; z: number; error?: string }) => void,
-): () => void {
-  const sub = DeviceEventEmitter.addListener('MagnetometerUpdate', (v: any) => {
-    cb({ x: v.x ?? 0, y: v.y ?? 0, z: v.z ?? 0, error: v.error });
-  });
-  try {
-    native?.startMagnetometer(intervalMs);
-  } catch {
-    // 忽略
-  }
-  return () => {
-    sub.remove();
+function safe<T extends any[]>(fn: (...args: T) => void): (...args: T) => void {
+  return (...args: T) => {
     try {
-      native?.stopMagnetometer();
+      native ? fn(...args) : undefined;
     } catch {
-      // 忽略
+      // 原生层异常静默，页面自行处理"无数据"状态
     }
   };
+}
+
+export const setKeepScreenOn = safe((on: boolean) => native!.setKeepScreenOn(on));
+export const setOrientation = safe((m: 'landscape' | 'portrait' | 'auto') =>
+  native!.setOrientation(m),
+);
+export const setImmersive = safe((on: boolean) => native!.setImmersive(on));
+export const nativeVibrate = safe((pattern: string) => native!.vibrate(pattern));
+export const cancelVibrate = safe(() => native!.cancelVibrate());
+
+type Vec3 = {
+  x: number;
+  y: number;
+  z: number;
+  magnitude?: number;
+  heading?: number;
+  error?: string;
+};
+
+function sensorFn(
+  eventName: string,
+  startFn: (n: number) => void,
+  stopFn: () => void,
+): (intervalMs: number, cb: (v: Vec3) => void) => () => void {
+  return (intervalMs: number, cb: (v: Vec3) => void) => {
+    let sub: { remove: () => void } | null = null;
+    try {
+      sub = DeviceEventEmitter.addListener(eventName, (v: any) => {
+        cb({
+          x: v?.x ?? 0,
+          y: v?.y ?? 0,
+          z: v?.z ?? 0,
+          magnitude: v?.magnitude,
+          heading: v?.heading,
+          error: v?.error,
+        });
+      });
+      startFn(intervalMs);
+    } catch {
+      cb({ x: 0, y: 0, z: 0, error: 'unsupported' });
+    }
+    return () => {
+      try {
+        sub?.remove();
+      } catch {}
+      try {
+        if (native) stopFn();
+      } catch {}
+    };
+  };
+}
+
+export const startMagnetometer = sensorFn(
+  'MagnetometerUpdate',
+  (n) => native!.startMagnetometer(n),
+  () => native!.stopSensors(),
+);
+
+export const startAccelerometer = sensorFn(
+  'AccelerometerUpdate',
+  (n) => native!.startAccelerometer(n),
+  () => native!.stopSensors(),
+);
+
+export const startCompass = sensorFn(
+  'CompassUpdate',
+  (n) => native!.startCompass(n),
+  () => native!.stopSensors(),
+);
+
+/** 噪音检测：启动（自动请求麦克风权限），失败返回错误信息 */
+export async function startNoise(): Promise<string | null> {
+  if (!native?.startNoise) return '设备不支持';
+  try {
+    const perm = PermissionsAndroid.PERMISSIONS.RECORD_AUDIO;
+    const got = await PermissionsAndroid.request(perm, {
+      title: '噪音检测需要麦克风',
+      message: '用于测量环境声音强度，不会录音保存',
+      buttonPositive: '允许',
+      buttonNegative: '拒绝',
+    });
+    if (got !== PermissionsAndroid.RESULTS.GRANTED) return '未授予麦克风权限';
+    await native.startNoise();
+    return null;
+  } catch (e: any) {
+    return e?.message || '启动失败';
+  }
+}
+
+export async function getNoiseAmplitude(): Promise<number> {
+  try {
+    return (await native?.getNoiseAmplitude()) ?? -1;
+  } catch {
+    return -1;
+  }
+}
+
+export function stopNoise(): void {
+  try {
+    native?.stopNoise();
+  } catch {}
+}
+
+export async function getWallpaper(): Promise<string> {
+  try {
+    return await native!.getWallpaper();
+  } catch (e: any) {
+    throw new Error(e?.message || '获取壁纸失败');
+  }
+}
+
+export async function getDeviceInfo(): Promise<Record<string, string> | null> {
+  try {
+    return ((await native?.getDeviceInfo()) as any) ?? null;
+  } catch {
+    return null;
+  }
 }
