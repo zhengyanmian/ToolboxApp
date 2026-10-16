@@ -41,6 +41,11 @@ import Lottery from './tools/lottery';
 import Subnet from './tools/subnet';
 import HttpStatus from './tools/httpStatus';
 import Typing from './tools/typing';
+import Pomodoro from './tools/pomodoro';
+import ScreenClock from './tools/screenClock';
+import ImageCompress from './tools/imageCompress';
+import ImageScramble from './tools/imageScramble';
+import MetalDetector from './tools/metalDetector';
 
 export type ToolDef = {
   id: string;
@@ -51,7 +56,7 @@ export type ToolDef = {
   component: React.ComponentType<{ onBack: () => void }>;
 };
 
-export const CATEGORIES = ['计算', '文本', '编码', '生成', '查询', '设备'];
+export const CATEGORIES = ['计算', '文本', '编码', '生成', '查询', '图片', '设备', '生活'];
 
 export const TOOLS: ToolDef[] = [
   { id: 'calculator', name: '计算器', icon: '🧮', category: '计算', desc: '支持函数与阶乘', component: Calculator },
@@ -95,5 +100,10 @@ export const TOOLS: ToolDef[] = [
   { id: 'hotlines', name: '常用电话', icon: '☎️', category: '查询', desc: '公共服务号码速拨', component: Hotlines },
   { id: 'subnet', name: 'IP 子网计算', icon: '🌐', category: '查询', desc: '网段/广播/可用范围', component: Subnet },
   { id: 'http', name: 'HTTP 状态码', icon: '📡', category: '查询', desc: '含义速查/搜索', component: HttpStatus },
+  { id: 'imgcompress', name: '图片压缩', icon: '🖼️', category: '图片', desc: '压缩/改格式/存相册', component: ImageCompress },
+  { id: 'imgscramble', name: '图片混淆', icon: '🧩', category: '图片', desc: '乱序加密/同钥还原', component: ImageScramble },
+  { id: 'metal', name: '金属探测仪', icon: '🧲', category: '设备', desc: '磁力计探测金属', component: MetalDetector },
+  { id: 'pomodoro', name: '番茄钟', icon: '🍅', category: '生活', desc: '专注/休息循环', component: Pomodoro },
+  { id: 'screenclock', name: '屏幕时钟', icon: '🕛', category: '生活', desc: '全屏时钟/常亮/农历', component: ScreenClock },
   { id: 'screen', name: '屏幕信息', icon: '📱', category: '设备', desc: '分辨率/密度/系统', component: ScreenInfo },
 ];
