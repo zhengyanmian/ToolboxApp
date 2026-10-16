@@ -40,3 +40,5 @@ react-native / react / mathjs / dayjs / lunar-typescript / qrcode-generator / re
 ## 补丁说明
 
 `react-native-sensors@7.3.6` 的安卓构建脚本过旧（jcenter/AGP 3.5.1，与 Gradle 9 / AGP 8 不兼容）。已修补后的完整 `build.gradle` 存于 `patches/react-native-sensors.android.build.gradle`；若重新 `npm install`，把它复制回 `node_modules/react-native-sensors/android/build.gradle` 即可。
+
+`react-native-document-picker@9.3.1` 依赖 RN 0.88 已移除的 `GuardedResultAsyncTask`。修补后的 `RNDocumentPickerModule.java` 存于 `patches/react-native-document-picker.RNDocumentPickerModule.java`，重装依赖后复制回 `node_modules/react-native-document-picker/android/src/main/java/com/reactnativedocumentpicker/`。
