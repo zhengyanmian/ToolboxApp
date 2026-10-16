@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import KeepAwake from 'react-native-keep-awake';
 import { Lunar } from 'lunar-typescript';
 import { Page, C } from '../ui';
+import { setKeepScreenOn } from '../native';
 
 export default function ScreenClock({ onBack }: { onBack: () => void }) {
   const [now, setNow] = useState(new Date());
@@ -13,6 +13,11 @@ export default function ScreenClock({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    setKeepScreenOn(true);
+    return () => setKeepScreenOn(false);
   }, []);
 
   const hh24 = now.getHours();
@@ -40,7 +45,6 @@ export default function ScreenClock({ onBack }: { onBack: () => void }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: bg }}>
-      <KeepAwake />
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <TouchableOpacity
           style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}

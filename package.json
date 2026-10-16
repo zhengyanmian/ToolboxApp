@@ -28,7 +28,6 @@
     "react-native": "0.88.0",
     "react-native-blob-util": "^0.25.1",
     "react-native-image-picker": "^8.3.0",
-    "react-native-keep-awake": "^4.0.0",
     "react-native-safe-area-context": "^5.5.2",
     "react-native-sensors": "^7.3.6"
   },

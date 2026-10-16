@@ -35,3 +35,7 @@ JAVA_HOME=C:/Users/24508/android-build/jdk/jdk-17.0.20.1+1 ANDROID_HOME=C:/Users
 ## 开源依赖
 
 react-native / react / mathjs / dayjs / lunar-typescript / qrcode-generator / react-native-safe-area-context（均 MIT 或同等许可）
+
+## 补丁说明
+
+`react-native-sensors@7.3.6` 的安卓构建脚本过旧（jcenter/AGP 3.5.1，与 Gradle 9 / AGP 8 不兼容）。已修补后的完整 `build.gradle` 存于 `patches/react-native-sensors.android.build.gradle`；若重新 `npm install`，把它复制回 `node_modules/react-native-sensors/android/build.gradle` 即可。
