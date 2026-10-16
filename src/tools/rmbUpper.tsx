@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Page, Card, Field, Btn, Result, Row, C } from '../ui';
+import { Page, Card, Field, Btn, Result, Row, C, dynStyles} from '../ui';
 
 const DIG = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖'];
 const UNITS = ['', '拾', '佰', '仟'];
@@ -84,8 +84,8 @@ export default function RmbUpper({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   box: { backgroundColor: C.bg, borderRadius: 8, padding: 12, borderWidth: 1, borderColor: C.line },
   out: { fontSize: 16, fontWeight: '700', color: C.text, lineHeight: 24 },
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

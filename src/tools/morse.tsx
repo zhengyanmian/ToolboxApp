@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, Btn, Row, C } from '../ui';
+import { Page, Card, Field, Btn, Row, C, dynStyles} from '../ui';
 import { Text, StyleSheet } from 'react-native';
 
 // 国际摩斯电码表（公共领域数据）
@@ -79,8 +79,8 @@ export default function Morse({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   outTitle: { fontSize: 13, color: C.sub, marginBottom: 6 },
   out: { fontSize: 14, color: C.text, lineHeight: 20 },
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import { Page, Card, Field, Row, C } from '../ui';
+import { Page, Card, Field, Row, C, dynStyles} from '../ui';
 
 type Op = { type: 'same' | 'add' | 'del'; text: string };
 
@@ -53,8 +53,8 @@ export default function Diff({ onBack }: { onBack: () => void }) {
               key={i}
               style={[
                 st.line,
-                o.type === 'add' && { color: C.ok, backgroundColor: '#e8f7ee' },
-                o.type === 'del' && { color: C.warn, backgroundColor: '#fdeaea', textDecorationLine: 'line-through' },
+                o.type === 'add' && { color: C.ok, backgroundColor: C.ok + '22' },
+                o.type === 'del' && { color: C.warn, backgroundColor: C.warn + '22', textDecorationLine: 'line-through' },
                 o.type === 'same' && { color: C.sub },
               ]}>
               {o.type === 'add' ? '+ ' : o.type === 'del' ? '- ' : '  '}
@@ -67,7 +67,7 @@ export default function Diff({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   stat: { fontSize: 13, color: C.ok, fontWeight: '600', marginLeft: 4, marginBottom: 8 },
   line: { fontSize: 13, lineHeight: 20, fontFamily: 'monospace' },
-});
+}));;

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Page, Card, C } from '../ui';
+import { Page, Card, C, dynStyles} from '../ui';
 import { View, Text, StyleSheet } from 'react-native';
 
 const ZONES: { city: string; tz: string }[] = [
@@ -79,10 +79,10 @@ export default function WorldClock({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   city: { fontSize: 16, fontWeight: '600', color: C.text },
   date: { fontSize: 12, color: C.sub, marginTop: 2 },
   time: { fontSize: 24, fontWeight: '700', color: C.primary, fontVariant: ['tabular-nums'] },
   diff: { fontSize: 11, color: C.sub, marginTop: 2 },
-});
+}));;

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Page, Card, Field, Result, Row, C } from '../ui';
+import { Page, Card, Field, Result, Row, C, dynStyles} from '../ui';
 
 function ipToInt(ip: string): number | null {
   const parts = ip.trim().split('.');
@@ -83,7 +83,7 @@ export default function Subnet({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   err: { color: C.warn, fontSize: 14 },
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

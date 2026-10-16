@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, Result, C } from '../ui';
+import { Page, Card, Field, Result, C, dynStyles} from '../ui';
 import { View, Text, StyleSheet } from 'react-native';
 
 function clamp(v: number, min: number, max: number): number {
@@ -70,7 +70,7 @@ export default function ColorTool({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   swatch: {
     height: 80, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: C.line,
@@ -78,4 +78,4 @@ const st = StyleSheet.create({
   swatchText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   err: { color: C.warn, fontSize: 13 },
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

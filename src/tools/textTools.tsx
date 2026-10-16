@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, Btn, Row, Result, C } from '../ui';
+import { Page, Card, Field, Btn, Row, Result, C, dynStyles} from '../ui';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
 // 文本工具合集：去重 / 替换 / 统计
@@ -104,16 +104,16 @@ export default function TextTools({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   tabs: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   tab: {
     flex: 1, paddingVertical: 9, borderRadius: 8, alignItems: 'center',
-    backgroundColor: '#fff', borderWidth: 1, borderColor: C.line,
+    backgroundColor: C.cardSolid, borderWidth: 1, borderColor: C.line,
   },
-  tabOn: { backgroundColor: '#e8f0fe', borderColor: C.primary },
+  tabOn: { backgroundColor: C.primarySoft, borderColor: C.primary },
   tabText: { fontSize: 14, color: C.sub },
   tabTextOn: { color: C.primary, fontWeight: '600' },
   tip: { fontSize: 12, color: C.sub, marginBottom: 10 },
   outTitle: { fontSize: 13, color: C.sub, marginBottom: 6 },
   out: { fontSize: 14, color: C.text, lineHeight: 20 },
-});
+}));;

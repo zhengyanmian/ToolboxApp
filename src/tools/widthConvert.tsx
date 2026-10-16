@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Page, Card, Field, Result, Row, C } from '../ui';
+import { Page, Card, Field, Result, Row, C, dynStyles} from '../ui';
 
 // 全角 <-> 半角（ASCII 区）
 function toHalf(s: string): string {
@@ -52,4 +52,4 @@ export default function WidthConvert({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({ tip: { fontSize: 12, color: C.sub, lineHeight: 18 } });
+const st = dynStyles((C) => StyleSheet.create({ tip: { fontSize: 12, color: C.sub, lineHeight: 18 } }));;

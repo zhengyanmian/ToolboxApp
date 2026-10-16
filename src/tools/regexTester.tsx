@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, C } from '../ui';
+import { Page, Card, Field, C, dynStyles} from '../ui';
 import { Text, StyleSheet, View } from 'react-native';
 
 export default function RegexTester({ onBack }: { onBack: () => void }) {
@@ -63,7 +63,7 @@ export default function RegexTester({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   flagRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
   flagLabel: { fontSize: 13, color: C.sub },
   flag: {
@@ -71,9 +71,9 @@ const st = StyleSheet.create({
     backgroundColor: C.bg, borderWidth: 1, borderColor: C.line,
     fontSize: 13, color: C.sub, overflow: 'hidden',
   },
-  flagOn: { backgroundColor: '#e8f0fe', borderColor: C.primary, color: C.primary, fontWeight: '600' },
+  flagOn: { backgroundColor: C.primarySoft, borderColor: C.primary, color: C.primary, fontWeight: '600' },
   sec: { fontSize: 14, fontWeight: '600', color: C.text, marginBottom: 6 },
   item: { fontSize: 14, color: C.text, paddingVertical: 3 },
   err: { color: C.warn, fontSize: 13, lineHeight: 18 },
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

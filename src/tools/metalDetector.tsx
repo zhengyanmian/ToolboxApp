@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Vibration } from 'react-native';
-import { Page, Card, C } from '../ui';
+import { Page, Card, C, dynStyles} from '../ui';
 import { startMagnetometer } from '../native';
 
 function label(uT: number): { text: string; color: string } {
@@ -89,7 +89,7 @@ export default function MetalDetector({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   value: { fontSize: 64, fontWeight: '800', fontVariant: ['tabular-nums'] },
   unit: { fontSize: 14, color: C.sub, marginTop: 4 },
   hint: { fontSize: 12, color: C.sub, marginTop: 10, textAlign: 'center', lineHeight: 18 },
@@ -107,4 +107,4 @@ const st = StyleSheet.create({
   err: { color: C.warn, fontSize: 15, lineHeight: 22, textAlign: 'center' },
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
   tip2: { fontSize: 12, color: C.sub, lineHeight: 18, marginTop: 8 },
-});
+}));;

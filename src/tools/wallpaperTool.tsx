@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Image, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { CameraRoll } from '@react-native-camera-roll/camera-roll';
-import { Page, Card, Btn, Row, C } from '../ui';
+import { Page, Card, Btn, Row, C, dynStyles} from '../ui';
 import { getWallpaper } from '../native';
 
 export default function WallpaperTool({ onBack }: { onBack: () => void }) {
@@ -52,7 +52,7 @@ export default function WallpaperTool({ onBack }: { onBack: () => void }) {
           <Image source={{ uri: path }} style={st.img} resizeMode="contain" />
           <Row style={{ marginTop: 10 }}>
             <Btn text="保存到相册" onPress={save} />
-            {saved && <Text style={st.ok}>已保存 ✓</Text>}
+            {saved && <Text style={st.ok}>已保存</Text>}
           </Row>
         </Card>
       )}
@@ -65,9 +65,9 @@ export default function WallpaperTool({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   img: { width: '100%', height: 260, borderRadius: 10, backgroundColor: '#000' },
   err: { color: C.warn, fontSize: 13, marginTop: 8 },
   ok: { color: C.ok, fontSize: 13, marginLeft: 8, alignSelf: 'center' },
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
-import { Page, Card, C } from '../ui';
+import { Page, Card, C, dynStyles} from '../ui';
 import { startCompass } from '../native';
 
 const SIZE = 260;
@@ -75,7 +75,7 @@ export default function Compass({ onBack }: { onBack: () => void }) {
                     y1={SIZE / 2 - r1 * Math.cos(a)}
                     x2={SIZE / 2 + r2 * Math.sin(a)}
                     y2={SIZE / 2 - r2 * Math.cos(a)}
-                    stroke={major ? '#334155' : '#cbd5e1'}
+                    stroke={major ? C.text : C.line}
                     strokeWidth={major ? 2 : 1}
                   />
                 );
@@ -111,7 +111,7 @@ export default function Compass({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   needleN: {
     position: 'absolute',
     top: SIZE / 2 - 46,
@@ -142,4 +142,4 @@ const st = StyleSheet.create({
   dir: { fontSize: 16, fontWeight: '600', marginTop: 2 },
   err: { color: C.warn, fontSize: 13, marginTop: 8 },
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

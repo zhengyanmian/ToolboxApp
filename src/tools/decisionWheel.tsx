@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
-import Svg, { Path, G, Text as SvgText } from 'react-native-svg';
-import { Page, Card, Btn, Field, C } from '../ui';
+import Svg, { Path, Polygon, G, Text as SvgText } from 'react-native-svg';
+import { Page, Card, Btn, Field, C, dynStyles} from '../ui';
 
 const SIZE = 280;
 const R = SIZE / 2 - 6;
@@ -56,7 +56,9 @@ export default function DecisionWheel({ onBack }: { onBack: () => void }) {
     <Page id="wheel" title="决定转盘" onBack={onBack}>
       <Card style={{ alignItems: 'center' }}>
         <View style={{ width: SIZE + 20, height: SIZE + 24, alignItems: 'center' }}>
-          <Text style={st.pointer}>▼</Text>
+          <Svg width={18} height={11} style={{ marginBottom: -2, zIndex: 1 }}>
+            <Polygon points="9,11 0,0 18,0" fill={C.warn} />
+          </Svg>
           <Animated.View style={{ transform: [{ rotate: rot }] }}>
             <Svg width={SIZE} height={SIZE}>
               <G>
@@ -104,7 +106,7 @@ export default function DecisionWheel({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   pointer: { color: C.warn, fontSize: 22, marginBottom: -4, zIndex: 1 },
   result: { fontSize: 22, fontWeight: '800', color: C.primary, marginTop: 14 },
-});
+}));;

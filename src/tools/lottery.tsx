@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Page, Card, Field, Btn, Row, C } from '../ui';
+import { Page, Card, Field, Btn, Row, C, dynStyles} from '../ui';
 
 export default function Lottery({ onBack }: { onBack: () => void }) {
   const [diceCount, setDiceCount] = useState('1');
@@ -45,7 +45,7 @@ export default function Lottery({ onBack }: { onBack: () => void }) {
   return (
     <Page id="lottery" title="骰子 / 抽签 / 分组" onBack={onBack}>
       <Card>
-        <Text style={st.title}>🎲 掷骰子</Text>
+        <Text style={st.title}>掷骰子</Text>
         <Row>
           <View style={{ flex: 1 }}>
             <Field label="数量" value={diceCount} onChange={setDiceCount} keyboardType="numbers-and-punctuation" />
@@ -61,13 +61,13 @@ export default function Lottery({ onBack }: { onBack: () => void }) {
       </Card>
 
       <Card>
-        <Text style={st.title}>🪙 抛硬币</Text>
+        <Text style={st.title}>抛硬币</Text>
         <Btn text="抛！" onPress={flip} kind="plain" />
         {coin.length > 0 && <Text style={st.big}>{coin.join(' · ')}</Text>}
       </Card>
 
       <Card>
-        <Text style={st.title}>🎯 抽签 / 分组</Text>
+        <Text style={st.title}>抽签与分组</Text>
         <Field
           label="名单（每行一个）"
           value={names}
@@ -96,9 +96,9 @@ function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   title: { fontSize: 15, fontWeight: '700', color: C.text, marginBottom: 10 },
   big: { fontSize: 30, fontWeight: '700', color: C.primary, textAlign: 'center', marginTop: 12 },
   drawn: { fontSize: 14, color: C.ok, marginTop: 8, lineHeight: 20 },
   group: { fontSize: 14, color: C.text, marginTop: 8, lineHeight: 20 },
-});
+}));;

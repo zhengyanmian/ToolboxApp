@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, Result, C } from '../ui';
+import { Page, Card, Field, Result, C, dynStyles} from '../ui';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
 type Mode = 'simple' | 'compound';
@@ -73,15 +73,15 @@ function fmt(v: number): string {
   return v.toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   modeRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   mode: {
     flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center',
     backgroundColor: C.bg, borderWidth: 1, borderColor: C.line,
   },
-  modeOn: { backgroundColor: '#e8f0fe', borderColor: C.primary },
+  modeOn: { backgroundColor: C.primarySoft, borderColor: C.primary },
   modeText: { fontSize: 14, color: C.sub },
   modeTextOn: { color: C.primary, fontWeight: '600' },
   sec: { fontSize: 14, fontWeight: '600', color: C.text, marginBottom: 6 },
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

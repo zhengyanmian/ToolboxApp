@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, Btn, Row, C } from '../ui';
+import { Page, Card, Field, Btn, Row, C, dynStyles} from '../ui';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import qrcode from 'qrcode-generator';
 
@@ -71,7 +71,7 @@ export default function QrGen({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   tip: { fontSize: 12, color: C.sub, marginTop: 8, textAlign: 'center' },
   err: { color: C.warn, fontSize: 14 },
-});
+}));;

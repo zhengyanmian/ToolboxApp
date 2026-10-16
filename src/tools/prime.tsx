@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Page, Card, Field, Btn, Result, Row, C } from '../ui';
+import { Page, Card, Field, Btn, Result, Row, C, dynStyles} from '../ui';
 
 function isPrime(n: number): boolean {
   if (n < 2 || !Number.isInteger(n)) return false;
@@ -38,7 +38,7 @@ export default function Prime({ onBack }: { onBack: () => void }) {
       return;
     }
     const rows: { k: string; v: string }[] = [];
-    rows.push({ k: `${a} 是否质数`, v: isPrime(a) ? '是 ✔' : '否' });
+    rows.push({ k: `${a} 是否质数`, v: isPrime(a) ? '是' : '否' });
     if (!isPrime(a) && Math.abs(a) > 1) {
       const fs = factorize(a);
       const grouped = group(fs);
@@ -78,4 +78,4 @@ function group(fs: number[]) {
   return [...m.entries()].map(([p, c]) => ({ p, c })).sort((a, b) => a.p - b.p);
 }
 
-const st = StyleSheet.create({ err: { color: C.warn, fontSize: 13, marginBottom: 8 } });
+const st = dynStyles((C) => StyleSheet.create({ err: { color: C.warn, fontSize: 13, marginBottom: 8 } }));;

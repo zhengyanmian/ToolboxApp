@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, Result, C } from '../ui';
+import { Page, Card, Field, Result, C, dynStyles} from '../ui';
 import { Text, StyleSheet } from 'react-native';
 
 export default function AgeCalc({ onBack }: { onBack: () => void }) {
@@ -65,6 +65,6 @@ function pad(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

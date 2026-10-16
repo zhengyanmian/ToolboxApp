@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
-import { Page, Card, Btn, Row, C } from '../ui';
+import { Page, Card, Btn, Row, C, dynStyles} from '../ui';
 
 const PARAS = [
   '工具的价值在于解决真实的重复劳动，而不是堆砌看起来很多的功能按钮。',
@@ -96,7 +96,7 @@ export default function Typing({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   label: { fontSize: 12, color: C.sub, marginBottom: 8 },
   target: { fontSize: 16, lineHeight: 26, color: C.text },
   input: {
@@ -112,4 +112,4 @@ const st = StyleSheet.create({
   statVal: { fontSize: 24, fontWeight: '700', color: C.primary },
   statKey: { fontSize: 12, color: C.sub, marginTop: 4 },
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

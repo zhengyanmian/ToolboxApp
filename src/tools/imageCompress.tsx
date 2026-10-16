@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Image } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import ImageResizer from '@bam.tech/react-native-image-resizer';
 import { CameraRoll } from '@react-native-camera-roll/camera-roll';
-import { Page, Card, Btn, Row, C } from '../ui';
+import { Page, Card, Btn, Row, C, dynStyles} from '../ui';
 
 type Fmt = 'JPEG' | 'PNG' | 'WEBP';
 const WIDTHS = [0, 1920, 1080, 720, 480]; // 0 = 原尺寸
@@ -153,7 +153,7 @@ export default function ImageCompress({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   preview: { width: '100%', height: 200, marginTop: 12, borderRadius: 8, backgroundColor: '#00000010' },
   meta: { fontSize: 12, color: C.sub, marginTop: 8, textAlign: 'center' },
   label: { fontSize: 13, color: C.sub, marginBottom: 8 },
@@ -163,4 +163,4 @@ const st = StyleSheet.create({
   estMeta: { fontSize: 12, color: C.sub, marginTop: 4 },
   estimating: { fontSize: 15, color: C.sub },
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, Btn, Row, Result, C } from '../ui';
+import { Page, Card, Field, Btn, Row, Result, C, dynStyles} from '../ui';
 import { Text, View, StyleSheet, ActivityIndicator } from 'react-native';
 
 // 数据源：open.er-api.com 免费汇率接口（无需 Key），失败时提示检查网络
@@ -93,7 +93,7 @@ function fmt(v: number): string {
 function fmt2(v: number): string { return String(Math.round(v * 100) / 100); }
 function fmt4(v: number): string { return String(Math.round(v * 10000) / 10000); }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   label: { fontSize: 13, color: C.sub, marginBottom: 6 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
@@ -101,7 +101,7 @@ const st = StyleSheet.create({
     backgroundColor: C.bg, borderWidth: 1, borderColor: C.line,
     fontSize: 13, color: C.sub, overflow: 'hidden',
   },
-  chipOn: { backgroundColor: '#e8f0fe', borderColor: C.primary, color: C.primary, fontWeight: '600' },
+  chipOn: { backgroundColor: C.primarySoft, borderColor: C.primary, color: C.primary, fontWeight: '600' },
   err: { color: C.warn, fontSize: 13, marginTop: 8 },
   tip: { fontSize: 12, color: C.sub },
-});
+}));;

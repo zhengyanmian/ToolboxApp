@@ -1,5 +1,5 @@
 import React from 'react';
-import { Page, Card, Result, C } from '../ui';
+import { Page, Card, Result, C, dynStyles} from '../ui';
 import { Dimensions, PixelRatio, Platform, StyleSheet, Text } from 'react-native';
 
 // Android API 级别 → 版本名
@@ -41,6 +41,6 @@ export default function ScreenInfo({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, Btn, Row, C } from '../ui';
+import { Page, Card, Field, Btn, Row, C, dynStyles} from '../ui';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
 type Tab = 'b64' | 'url';
@@ -119,17 +119,17 @@ export default function Codec({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   tabs: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   tab: {
     flex: 1, paddingVertical: 9, borderRadius: 8, alignItems: 'center',
-    backgroundColor: '#fff', borderWidth: 1, borderColor: C.line,
+    backgroundColor: C.cardSolid, borderWidth: 1, borderColor: C.line,
   },
-  tabOn: { backgroundColor: '#e8f0fe', borderColor: C.primary },
+  tabOn: { backgroundColor: C.primarySoft, borderColor: C.primary },
   tabText: { fontSize: 14, color: C.sub },
   tabTextOn: { color: C.primary, fontWeight: '600' },
   outTitle: { fontSize: 13, color: C.sub, marginBottom: 6 },
   out: { fontSize: 14, color: C.text, lineHeight: 20 },
   err: { color: C.warn, fontSize: 13 },
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

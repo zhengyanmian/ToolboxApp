@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { pinyin } from 'pinyin-pro';
-import { Page, Card, Field, Btn, Result, Row, C } from '../ui';
+import { Page, Card, Field, Btn, Result, Row, C, dynStyles} from '../ui';
 
 export default function Pinyin({ onBack }: { onBack: () => void }) {
   const [input, setInput] = useState('');
@@ -45,4 +45,4 @@ export default function Pinyin({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({ tip: { fontSize: 12, color: C.sub, lineHeight: 18 } });
+const st = dynStyles((C) => StyleSheet.create({ tip: { fontSize: 12, color: C.sub, lineHeight: 18 } }));;

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Page, Card, Field, Result, Row, C } from '../ui';
+import { Page, Card, Field, Result, Row, C, dynStyles} from '../ui';
 
 function toUnicode(s: string): string {
   let out = '';
@@ -77,4 +77,4 @@ export default function Unicode({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({ tip: { fontSize: 12, color: C.sub, lineHeight: 18 } });
+const st = dynStyles((C) => StyleSheet.create({ tip: { fontSize: 12, color: C.sub, lineHeight: 18 } }));;

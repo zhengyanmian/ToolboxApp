@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, Result, C } from '../ui';
+import { Page, Card, Field, Result, C, dynStyles} from '../ui';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 
 // 单位定义：以基准单位换算
@@ -159,14 +159,14 @@ function fmt(v: number): string {
   return String(Math.round(v * 1e8) / 1e8);
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   label: { fontSize: 13, color: C.sub, marginBottom: 6 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     paddingHorizontal: 12, paddingVertical: 7, borderRadius: 18,
     backgroundColor: C.bg, borderWidth: 1, borderColor: C.line,
   },
-  chipOn: { backgroundColor: '#e8f0fe', borderColor: C.primary },
+  chipOn: { backgroundColor: C.primarySoft, borderColor: C.primary },
   chipText: { fontSize: 13, color: C.sub },
   chipTextOn: { color: C.primary, fontWeight: '600' },
-});
+}));;

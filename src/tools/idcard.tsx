@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, Btn, Row, Result, C } from '../ui';
+import { Page, Card, Field, Btn, Row, Result, C, dynStyles} from '../ui';
 import { Text, StyleSheet } from 'react-native';
 
 const PROVINCES: Record<string, string> = {
@@ -74,6 +74,6 @@ export default function IdCard({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, Result, Btn, Row } from '../ui';
+import { Page, Card, Field, Result, Btn, Row, dynStyles} from '../ui';
 
 const DIGITS_LOW = '零一二三四五六七八九';
 const DIGITS_UP = '零壹贰叁肆伍陆柒捌玖';
@@ -111,4 +111,4 @@ function TextNote(props: { children: React.ReactNode }) {
   return <Text style={noteSt.t}>{props.children}</Text>;
 }
 
-const noteSt = { t: { fontSize: 12, color: '#6b7280', lineHeight: 18 } };
+const noteSt = dynStyles((C) => ({ t: { fontSize: 12, color: C.sub, lineHeight: 18 } }));;

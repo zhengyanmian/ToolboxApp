@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Page, Card, Field, Btn, Row, C } from '../ui';
+import { Page, Card, Field, Btn, Row, C, dynStyles} from '../ui';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -158,7 +158,7 @@ export default function Countdown({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   label: { fontSize: 13, color: C.sub, marginBottom: 6 },
   dateRow: { flexDirection: 'row', gap: 10 },
   dateCol: { flex: 1 },
@@ -179,4 +179,4 @@ const st = StyleSheet.create({
   days: { fontSize: 14, fontWeight: '700' },
   del: { fontSize: 13, color: C.warn },
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

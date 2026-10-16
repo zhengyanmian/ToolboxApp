@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Page, Card, Field, C } from '../ui';
+import { Page, Card, Field, C, dynStyles} from '../ui';
 
 const CODES: [number, string, string][] = [
   [100, 'Continue', '继续，客户端应继续请求'],
@@ -66,17 +66,17 @@ export default function HttpStatus({ onBack }: { onBack: () => void }) {
 }
 
 function colorOf(code: number): string {
-  if (code < 200) return '#6b7280';
+  if (code < 200) return C.sub;
   if (code < 300) return '#16a34a';
   if (code < 400) return '#2563eb';
   if (code < 500) return '#f97316';
   return '#dc2626';
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line },
   code: { width: 52, fontSize: 17, fontWeight: '800' },
   name: { fontSize: 14, fontWeight: '600', color: C.text },
   desc: { fontSize: 12, color: C.sub, marginTop: 2, lineHeight: 17 },
   empty: { color: C.sub, textAlign: 'center', paddingVertical: 16 },
-});
+}));;

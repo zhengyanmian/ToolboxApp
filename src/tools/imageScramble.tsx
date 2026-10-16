@@ -4,7 +4,7 @@ import { launchImageLibrary } from 'react-native-image-picker';
 import { CameraRoll } from '@react-native-camera-roll/camera-roll';
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import jpeg from 'jpeg-js';
-import { Page, Card, Btn, Row, Field, C } from '../ui';
+import { Page, Card, Btn, Row, Field, C, dynStyles} from '../ui';
 import { encodePng, decodePng, RawImage } from '../lib/png';
 
 // ---------- 基础工具 ----------
@@ -204,8 +204,8 @@ export default function ImageScramble({ onBack }: { onBack: () => void }) {
 
       {src ? (
         <Row>
-          <Btn text={busy ? '处理中…' : '🔒 混淆'} onPress={() => run(false)} />
-          <Btn text="🔓 反混淆" onPress={() => run(true)} kind="plain" />
+          <Btn text={busy ? '处理中…' : '混淆加密'} onPress={() => run(false)} />
+          <Btn text="还原图像" onPress={() => run(true)} kind="plain" />
         </Row>
       ) : null}
       {msg ? <Text style={st.msg}>{msg}</Text> : null}
@@ -221,11 +221,11 @@ export default function ImageScramble({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   preview: { width: '100%', height: 220, marginTop: 12, borderRadius: 8, backgroundColor: '#00000010' },
   meta: { fontSize: 12, color: C.sub, marginTop: 6, textAlign: 'center' },
   label: { fontSize: 13, color: C.sub, marginBottom: 8 },
   input: { height: 0 },
   msg: { fontSize: 13, color: C.ok, textAlign: 'center', marginTop: 10, lineHeight: 18 },
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

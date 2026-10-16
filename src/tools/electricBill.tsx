@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, Result, C } from '../ui';
+import { Page, Card, Field, Result, C, dynStyles} from '../ui';
 import { Text, StyleSheet } from 'react-native';
 
 export default function ElectricBill({ onBack }: { onBack: () => void }) {
@@ -41,6 +41,6 @@ export default function ElectricBill({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

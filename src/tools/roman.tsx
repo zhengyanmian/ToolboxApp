@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Page, Card, Field, Btn, Result, Row, C } from '../ui';
+import { Page, Card, Field, Btn, Result, Row, C, dynStyles} from '../ui';
 
 const MAP: [number, string][] = [
   [1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'],
@@ -67,7 +67,7 @@ export default function Roman({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   val: { fontSize: 22, fontWeight: '700', color: C.primary, marginTop: 4 },
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

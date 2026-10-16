@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Image, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
-import { Page, Card, Btn, Row, Result, C } from '../ui';
+import { Page, Card, Btn, Row, Result, C, dynStyles} from '../ui';
 import { readImageBytes, bytesToBase64 } from '../lib/imgio';
 
 export default function ImgToBase64({ onBack }: { onBack: () => void }) {
@@ -56,9 +56,9 @@ export default function ImgToBase64({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   prev: { width: '100%', height: 180, borderRadius: 10, marginTop: 12, backgroundColor: '#000' },
   meta: { fontSize: 12, color: C.sub, marginTop: 8 },
   tip: { fontSize: 12, color: C.sub, lineHeight: 18, marginTop: 8 },
   err: { color: C.warn, fontSize: 13, marginTop: 8 },
-});
+}));;

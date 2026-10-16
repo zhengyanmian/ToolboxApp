@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Page, Card, Btn, Row, Field, C } from '../ui';
+import { Page, Card, Btn, Row, Field, C, dynStyles} from '../ui';
 
 type P = { name: string; score: number };
 const KEY = 'scoreboard_v1';
@@ -69,9 +69,9 @@ export default function Scoreboard({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   name: { fontSize: 16, fontWeight: '600', color: C.text, flex: 1 },
   score: { fontSize: 26, fontWeight: '800', color: C.primary, fontVariant: ['tabular-nums'] },
   empty: { textAlign: 'center', color: C.sub, marginTop: 30 },
-});
+}));;

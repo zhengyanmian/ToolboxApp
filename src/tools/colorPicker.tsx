@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { View, Text, Image, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
-import { Page, Card, Btn, Row, C, Result } from '../ui';
+import { Page, Card, Btn, Row, C, Result, dynStyles} from '../ui';
 import { decodeImage, readImageBytes, bytesToBase64, RawImage } from '../lib/imgio';
 
 function rgbToHex(r: number, g: number, b: number): string {
@@ -105,9 +105,9 @@ export default function ColorPicker({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   img: { width: '100%', borderRadius: 8, marginTop: 8, backgroundColor: '#000' },
   tip: { fontSize: 13, color: C.text },
   swatch: { width: 64, height: 64, borderRadius: 12, marginRight: 12, borderWidth: 1, borderColor: C.line },
   err: { color: C.warn, fontSize: 13, marginTop: 8 },
-});
+}));;

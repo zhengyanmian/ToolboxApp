@@ -1,6 +1,10 @@
 package com.toolboxapp
 
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.ContentValues
+import android.content.Context
 import android.content.pm.ActivityInfo
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -8,9 +12,11 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.media.MediaRecorder
 import android.os.Build
+import android.os.Environment
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.provider.MediaStore
 import android.view.View
 import android.view.WindowManager
 import android.app.WallpaperManager
@@ -381,6 +387,53 @@ class ToolboxNativeModule(private val reactContext: ReactApplicationContext) :
       promise.resolve(p)
     } catch (e: Exception) {
       promise.reject("FAIL", e.message ?: "获取失败", e)
+    }
+  }
+
+  // ---------- 剪贴板 / 下载目录 ----------
+
+  @ReactMethod
+  fun copyText(text: String) {
+    ui { activity ->
+      val cm = activity.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+      cm?.setPrimaryClip(ClipData.newPlainText("toolbox", text))
+    }
+  }
+
+  /** 把应用缓存/私有目录里的文件复制到系统「下载」目录，返回可读路径 */
+  @ReactMethod
+  fun saveToDownloads(srcPath: String, displayName: String, mime: String, promise: Promise) {
+    try {
+      val src = File(srcPath)
+      if (!src.exists()) {
+        promise.reject("NO_FILE", "源文件不存在")
+        return
+      }
+      if (Build.VERSION.SDK_INT >= 29) {
+        val values = ContentValues()
+        values.put(MediaStore.Downloads.DISPLAY_NAME, displayName)
+        values.put(MediaStore.Downloads.MIME_TYPE, mime)
+        values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+        values.put(MediaStore.Downloads.IS_PENDING, 1)
+        val resolver = reactContext.contentResolver
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            ?: throw Exception("系统拒绝创建下载文件")
+        resolver.openOutputStream(uri)?.use { out ->
+          src.inputStream().use { ins -> ins.copyTo(out) }
+        }
+        values.clear()
+        values.put(MediaStore.Downloads.IS_PENDING, 0)
+        resolver.update(uri, values, null, null)
+        promise.resolve("${Environment.DIRECTORY_DOWNLOADS}/$displayName")
+      } else {
+        val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        if (!dir.exists()) dir.mkdirs()
+        val dst = File(dir, displayName)
+        src.inputStream().use { ins -> FileOutputStream(dst).use { ins.copyTo(it) } }
+        promise.resolve("${Environment.DIRECTORY_DOWNLOADS}/$displayName")
+      }
+    } catch (e: Exception) {
+      promise.reject("SAVE_FAIL", e.message ?: "保存失败", e)
     }
   }
 

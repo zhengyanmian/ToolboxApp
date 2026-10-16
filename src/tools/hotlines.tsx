@@ -1,5 +1,5 @@
 import React from 'react';
-import { Page, Card, C } from '../ui';
+import { Page, Card, C, dynStyles} from '../ui';
 import { View, Text, TouchableOpacity, Linking, StyleSheet } from 'react-native';
 
 // 全国通用公共服务电话（公开信息）
@@ -44,7 +44,7 @@ export default function Hotlines({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   row: {
     flexDirection: 'row', alignItems: 'center', paddingVertical: 11,
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line,
@@ -53,4 +53,4 @@ const st = StyleSheet.create({
   desc: { fontSize: 12, color: C.sub, marginTop: 2 },
   tel: { fontSize: 17, fontWeight: '700', color: C.primary },
   tip: { fontSize: 12, color: C.sub },
-});
+}));;

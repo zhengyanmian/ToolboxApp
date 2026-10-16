@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Page, Card, Field, Row, C } from '../ui';
+import { Page, Card, Field, Row, C, dynStyles} from '../ui';
 
 type Level = { score: number; label: string; color: string };
 
@@ -67,10 +67,10 @@ function estimateEntropy(pw: string): number {
   return Math.round(pw.length * Math.log2(pool || 1));
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   bars: { flexDirection: 'row', gap: 6, marginTop: 4 },
   bar: { flex: 1, height: 8, borderRadius: 4 },
   label: { fontSize: 16, fontWeight: '700' },
   entropy: { fontSize: 13, color: C.sub },
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

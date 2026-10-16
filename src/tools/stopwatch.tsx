@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Page, Card, Btn, Row, C } from '../ui';
+import { Page, Card, Btn, Row, C, dynStyles} from '../ui';
 
 function fmt(ms: number): string {
   const cs = Math.floor(ms / 10) % 100;
@@ -78,7 +78,7 @@ export default function Stopwatch({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   time: { fontSize: 44, fontWeight: '700', color: C.text, fontVariant: ['tabular-nums'] },
   lapHint: { fontSize: 12, color: C.sub, marginTop: 6 },
   lapRow: {
@@ -91,4 +91,4 @@ const st = StyleSheet.create({
   lapNo: { width: 40, color: C.sub, fontSize: 14 },
   lapSplit: { flex: 1, color: C.primary, fontSize: 14, textAlign: 'center' },
   lapTotal: { width: 110, color: C.text, fontSize: 14, fontWeight: '600', textAlign: 'right' },
-});
+}));;

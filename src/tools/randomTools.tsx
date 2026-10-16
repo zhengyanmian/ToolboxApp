@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, Btn, Row, C } from '../ui';
+import { Page, Card, Field, Btn, Row, C, dynStyles} from '../ui';
 import { Text, TouchableOpacity, View, StyleSheet } from 'react-native';
 
 export default function RandomTools({ onBack }: { onBack: () => void }) {
@@ -101,7 +101,7 @@ function Check(props: { label: string; on: boolean; set: (v: boolean) => void })
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   sec: { fontSize: 15, fontWeight: '600', color: C.text, marginBottom: 10 },
   chkRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   chkGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 6 },
@@ -116,4 +116,4 @@ const st = StyleSheet.create({
     marginTop: 12, fontSize: 18, color: C.primary, fontWeight: '700',
     letterSpacing: 1,
   },
-});
+}));;

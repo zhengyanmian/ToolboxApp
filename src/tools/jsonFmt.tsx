@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, Btn, Row, C } from '../ui';
+import { Page, Card, Field, Btn, Row, C, dynStyles} from '../ui';
 import { Text, StyleSheet } from 'react-native';
 
 export default function JsonFmt({ onBack }: { onBack: () => void }) {
@@ -52,9 +52,9 @@ export default function JsonFmt({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   indentLink: { fontSize: 13, color: C.primary, marginTop: 10 },
   outTitle: { fontSize: 13, color: C.sub, marginBottom: 6 },
   out: { fontSize: 13, color: C.text, lineHeight: 19 },
   err: { color: C.warn, fontSize: 13, lineHeight: 18 },
-});
+}));;

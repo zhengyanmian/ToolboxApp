@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Text, ScrollView } from 'react-native';
-import { Page, Card, Field, Btn, Row, Result, KV, C } from '../ui';
+import { Page, Card, Field, Btn, Row, Result, KV, C, dynStyles} from '../ui';
 
 export default function WebSource({ onBack }: { onBack: () => void }) {
   const [url, setUrl] = useState('');
@@ -61,8 +61,8 @@ export default function WebSource({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = {
+const st = dynStyles((C) => ({
   err: { color: '#dc2626', fontSize: 13, marginTop: 8 },
-  box: { maxHeight: 300, marginTop: 8, backgroundColor: '#f8fafc', borderRadius: 8, padding: 8 },
-  code: { fontSize: 11, color: '#334155' },
-};
+  box: { maxHeight: 300, marginTop: 8, backgroundColor: C.cardSolid, borderRadius: 8, padding: 8 },
+  code: { fontSize: 11, color: C.text },
+}));;

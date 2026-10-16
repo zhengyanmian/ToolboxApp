@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import md5Lib from 'js-md5';
 import sha1Lib from 'js-sha1';
 import sha256Lib from 'js-sha256';
-import { Page, Card, Field, Btn, Result, Row, C } from '../ui';
+import { Page, Card, Field, Btn, Result, Row, C, dynStyles} from '../ui';
 
 // js-* 库在 Hermes 下可能暴露为 hexdigest 函数或对象，做一层兼容
 function digest(lib: any, text: string): string {
@@ -46,4 +46,4 @@ export default function Hash({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({ tip: { fontSize: 12, color: C.sub, lineHeight: 18 } });
+const st = dynStyles((C) => StyleSheet.create({ tip: { fontSize: 12, color: C.sub, lineHeight: 18 } }));;

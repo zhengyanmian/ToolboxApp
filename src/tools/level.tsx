@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Page, Card, C } from '../ui';
+import { Page, Card, C, dynStyles} from '../ui';
 import { startAccelerometer } from '../native';
 
 const AREA = 220;
@@ -49,7 +49,7 @@ export default function Level({ onBack }: { onBack: () => void }) {
           {tilt.err ? <Text style={st.err}>{tilt.err}</Text> : null}
         </View>
         <Text style={[st.readout, tilt.flat && { color: C.ok }]}>
-          {tilt.err ? '—' : tilt.flat ? '已水平 ✓' : `横向 ${tilt.y.toFixed(1)}° · 纵向 ${tilt.x.toFixed(1)}°`}
+          {tilt.err ? '—' : tilt.flat ? '已水平' : `横向 ${tilt.y.toFixed(1)}° · 纵向 ${tilt.x.toFixed(1)}°`}
         </Text>
       </Card>
       <Card>
@@ -61,12 +61,12 @@ export default function Level({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   board: {
     width: AREA,
     height: AREA,
     borderRadius: AREA / 2,
-    backgroundColor: '#f8fafc',
+    backgroundColor: C.cardSolid,
     borderWidth: 2,
     borderColor: C.line,
     alignItems: 'center',
@@ -93,4 +93,4 @@ const st = StyleSheet.create({
   readout: { marginTop: 14, fontSize: 15, fontWeight: '600', color: C.text },
   err: { position: 'absolute', color: C.warn },
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

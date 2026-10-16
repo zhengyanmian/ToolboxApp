@@ -15,6 +15,8 @@ type ToolboxNative = {
   stopNoise(): void;
   getWallpaper(): Promise<string>;
   getDeviceInfo(): Promise<Record<string, unknown>>;
+  copyText(text: string): void;
+  saveToDownloads(srcPath: string, displayName: string, mime: string): Promise<string>;
 };
 
 const native: ToolboxNative | undefined = NativeModules.ToolboxNative as any;
@@ -144,4 +146,17 @@ export async function getDeviceInfo(): Promise<Record<string, string> | null> {
   } catch {
     return null;
   }
+}
+
+/** 复制文本到系统剪贴板 */
+export const copyText = safe((t: string) => native!.copyText(t));
+
+/** 把应用内文件写入系统「下载」目录（Android 10+ 走 MediaStore） */
+export async function saveToDownloads(
+  srcPath: string,
+  displayName: string,
+  mime: string,
+): Promise<string> {
+  if (!native?.saveToDownloads) throw new Error('当前设备不支持写入下载目录');
+  return await native.saveToDownloads(srcPath, displayName, mime);
 }

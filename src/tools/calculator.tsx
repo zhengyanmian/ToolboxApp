@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Page, Card, C, Result } from '../ui';
+import { Page, Card, C, Result, dynStyles} from '../ui';
 import { create, all } from 'mathjs';
 
 const math = create(all);
@@ -99,7 +99,7 @@ function fmt(v: number): string {
   return String(r);
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   expr: { fontSize: 26, color: C.text, minHeight: 36, fontWeight: '500' },
   preview: { fontSize: 14, color: C.sub, marginTop: 6, minHeight: 18 },
   pad: { backgroundColor: C.card, borderRadius: 12, padding: 8, marginBottom: 12 },
@@ -108,10 +108,10 @@ const st = StyleSheet.create({
     flex: 1, margin: 4, backgroundColor: C.bg, borderRadius: 10,
     alignItems: 'center', justifyContent: 'center', height: 56,
   },
-  opKey: { backgroundColor: '#e8f0fe' },
+  opKey: { backgroundColor: C.primarySoft },
   eqKey: { backgroundColor: C.primary },
   keyText: { fontSize: 20, color: C.text },
   hTitle: { fontSize: 13, color: C.sub, marginBottom: 6 },
   hItem: { fontSize: 14, color: C.text, paddingVertical: 3 },
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

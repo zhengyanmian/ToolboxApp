@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, Btn, Row, Result, C } from '../ui';
+import { Page, Card, Field, Btn, Row, Result, C, dynStyles} from '../ui';
 import { Text, TouchableOpacity, View, StyleSheet } from 'react-native';
 
 function nowSec(): string {
@@ -55,7 +55,7 @@ export default function Timestamp({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   sec: { fontSize: 15, fontWeight: '600', color: C.text, marginBottom: 10 },
   now: { fontSize: 24, fontWeight: '700', color: C.primary },
-});
+}));;

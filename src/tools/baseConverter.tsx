@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, Result, C } from '../ui';
+import { Page, Card, Field, Result, C, dynStyles} from '../ui';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
 const BASES = [
@@ -84,15 +84,15 @@ function formatBig(n: bigint, base: number): string {
   return n.toString(base).toUpperCase();
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
     backgroundColor: C.bg, borderWidth: 1, borderColor: C.line,
   },
-  chipOn: { backgroundColor: '#e8f0fe', borderColor: C.primary },
+  chipOn: { backgroundColor: C.primarySoft, borderColor: C.primary },
   chipText: { fontSize: 14, color: C.sub },
   chipTextOn: { color: C.primary, fontWeight: '600' },
   err: { color: C.warn, fontSize: 13, marginTop: 8 },
   tip: { fontSize: 12, color: C.sub },
-});
+}));;

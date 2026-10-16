@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, Btn, Row, Result, C } from '../ui';
+import { Page, Card, Field, Btn, Row, Result, C, dynStyles} from '../ui';
 import { View, Text, StyleSheet } from 'react-native';
 
 export default function BMI({ onBack }: { onBack: () => void }) {
@@ -50,10 +50,10 @@ export default function BMI({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   center: { alignItems: 'center', paddingVertical: 10 },
   bmiLabel: { fontSize: 14, color: C.sub },
   bmiValue: { fontSize: 44, fontWeight: '700', marginTop: 4 },
   level: { fontSize: 16, fontWeight: '600', marginTop: 2 },
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

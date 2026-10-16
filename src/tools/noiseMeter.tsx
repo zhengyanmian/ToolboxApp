@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Page, Card, Btn, C } from '../ui';
+import { Page, Card, Btn, C, dynStyles} from '../ui';
 import { startNoise, getNoiseAmplitude, stopNoise } from '../native';
 
 export default function NoiseMeter({ onBack }: { onBack: () => void }) {
@@ -96,7 +96,7 @@ export default function NoiseMeter({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   value: { fontSize: 62, fontWeight: '800', color: C.text, fontVariant: ['tabular-nums'] as any },
   unit: { fontSize: 13, color: C.sub, marginTop: 2 },
   barBg: {
@@ -112,4 +112,4 @@ const st = StyleSheet.create({
   peak: { fontSize: 12, color: C.sub, marginTop: 4, marginBottom: 12 },
   err: { color: C.warn, fontSize: 14, marginBottom: 12, textAlign: 'center' },
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

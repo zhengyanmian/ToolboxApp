@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Text } from 'react-native';
-import { Page, Card, Btn, Row, KV, C } from '../ui';
+import { Page, Card, Btn, Row, KV, C, dynStyles} from '../ui';
 
 type IpInfo = {
   ip: string;
@@ -64,4 +64,4 @@ export default function IpQuery({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = { err: { color: '#dc2626', fontSize: 13, marginTop: 8 }, tip: { fontSize: 12, color: C.sub, lineHeight: 18 } };
+const st = dynStyles((C) => ({ err: { color: '#dc2626', fontSize: 13, marginTop: 8 }, tip: { fontSize: 12, color: C.sub, lineHeight: 18 } }));;

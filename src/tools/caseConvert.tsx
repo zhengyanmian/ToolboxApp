@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, Btn, Row, C } from '../ui';
+import { Page, Card, Field, Btn, Row, C, dynStyles} from '../ui';
 import { Text, StyleSheet } from 'react-native';
 
 export default function CaseConvert({ onBack }: { onBack: () => void }) {
@@ -52,7 +52,7 @@ function toSnake(s: string): string {
   return words(s).map((w) => w.toLowerCase()).join('_');
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   outTitle: { fontSize: 13, color: C.sub, marginBottom: 6 },
   out: { fontSize: 14, color: C.text, lineHeight: 20 },
-});
+}));;

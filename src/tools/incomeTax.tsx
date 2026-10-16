@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, Result, C } from '../ui';
+import { Page, Card, Field, Result, C, dynStyles} from '../ui';
 import { Text, StyleSheet } from 'react-native';
 
 // 年度综合所得税率表（全年应纳税所得额，元）
@@ -60,6 +60,6 @@ function fmt(v: number): string {
   return Math.round(v * 100 / 100).toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;

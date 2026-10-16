@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, Btn, Row, Result, C } from '../ui';
+import { Page, Card, Field, Btn, Row, Result, C, dynStyles} from '../ui';
 import { Text, StyleSheet } from 'react-native';
 
 function today(): string {
@@ -65,7 +65,7 @@ export default function DateCalc({ onBack }: { onBack: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = dynStyles((C) => StyleSheet.create({
   sec: { fontSize: 15, fontWeight: '600', color: C.text, marginBottom: 10 },
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
-});
+}));;
