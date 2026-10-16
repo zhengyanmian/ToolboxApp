@@ -67,7 +67,7 @@ export function Card(props: { children: React.ReactNode; style?: object }) {
 }
 
 export function Field(props: {
-  label: string;
+  label?: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
@@ -76,7 +76,7 @@ export function Field(props: {
 }) {
   return (
     <View style={{ marginBottom: 12 }}>
-      <Text style={s.label}>{props.label}</Text>
+      {props.label ? <Text style={s.label}>{props.label}</Text> : null}
       <TextInput
         style={[s.input, props.multiline && { height: 100, textAlignVertical: 'top' }]}
         value={props.value}

@@ -41,10 +41,6 @@ function Root() {
   }, [stack]);
 
   const tool = stack ? TOOLS.find((t) => t.id === stack) ?? null : null;
-  if (tool) {
-    const Comp = tool.component;
-    return <Comp onBack={() => setStack(null)} />;
-  }
 
   const q = query.trim().toLowerCase();
   const filtered = q
@@ -54,52 +50,57 @@ function Root() {
   return (
     <View style={s.root}>
       <StatusBar barStyle="dark-content" />
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <View style={[s.top, { paddingTop: Math.max(insets.top, 8) + 6 }]}>
-          <Text style={s.title}>工具箱</Text>
-          <Text style={s.subtitle}>原创开源 · 全部功能免费</Text>
-        </View>
-        <View style={s.searchWrap}>
-          <TextInput
-            style={s.search}
-            value={query}
-            onChangeText={setQuery}
-            placeholder="搜索工具…"
-            placeholderTextColor={C.sub}
-          />
-        </View>
-        <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 40 }}>
-          {filtered ? (
-            filtered.length > 0 ? (
-              <View style={s.grid}>
-                {filtered.map((t) => (
-                  <ToolCard key={t.id} tool={t} onPress={() => setStack(t.id)} />
-                ))}
-              </View>
-            ) : (
-              <Text style={s.empty}>没有匹配的工具</Text>
-            )
-          ) : (
-            CATEGORIES.map((cat) => {
-              const list = TOOLS.filter((t) => t.category === cat);
-              if (!list.length) return null;
-              return (
-                <View key={cat} style={{ marginBottom: 18 }}>
-                  <Text style={s.catTitle}>{cat}</Text>
-                  <View style={s.grid}>
-                    {list.map((t) => (
-                      <ToolCard key={t.id} tool={t} onPress={() => setStack(t.id)} />
-                    ))}
-                  </View>
+      {/* 首页常驻不卸载，保证返回后滚动位置不丢 */}
+      <View style={[{ flex: 1 }, tool ? { display: 'none' } : null]}>
+        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+          <View style={[s.top, { paddingTop: Math.max(insets.top, 8) + 6 }]}>
+            <Text style={s.title}>工具箱</Text>
+            <Text style={s.subtitle}>原创开源 · 全部功能免费</Text>
+          </View>
+          <View style={s.searchWrap}>
+            <TextInput
+              style={s.search}
+              value={query}
+              onChangeText={setQuery}
+              placeholder="搜索工具…"
+              placeholderTextColor={C.sub}
+            />
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 40 }}>
+            {filtered ? (
+              filtered.length > 0 ? (
+                <View style={s.grid}>
+                  {filtered.map((t) => (
+                    <ToolCard key={t.id} tool={t} onPress={() => setStack(t.id)} />
+                  ))}
                 </View>
-              );
-            })
-          )}
-          <Text style={s.foot}>
-            共 {TOOLS.length} 个工具 · 后续版本持续添加
-          </Text>
-        </ScrollView>
-      </SafeAreaView>
+              ) : (
+                <Text style={s.empty}>没有匹配的工具</Text>
+              )
+            ) : (
+              CATEGORIES.map((cat) => {
+                const list = TOOLS.filter((t) => t.category === cat);
+                if (!list.length) return null;
+                return (
+                  <View key={cat} style={{ marginBottom: 18 }}>
+                    <Text style={s.catTitle}>{cat}</Text>
+                    <View style={s.grid}>
+                      {list.map((t) => (
+                        <ToolCard key={t.id} tool={t} onPress={() => setStack(t.id)} />
+                      ))}
+                    </View>
+                  </View>
+                );
+              })
+            )}
+            <Text style={s.foot}>
+              共 {TOOLS.length} 个工具 · 后续版本持续添加
+            </Text>
+          </ScrollView>
+        </SafeAreaView>
+      </View>
+      {/* 工具页覆盖层 */}
+      {tool ? <tool.component onBack={() => setStack(null)} /> : null}
     </View>
   );
 }

@@ -23,6 +23,9 @@ import LunarTool from './tools/lunar';
 import WorldClock from './tools/worldClock';
 import Hotlines from './tools/hotlines';
 import ScreenInfo from './tools/screenInfo';
+import ElectricBill from './tools/electricBill';
+import RegexTester from './tools/regexTester';
+import Morse from './tools/morse';
 
 export type ToolDef = {
   id: string;
@@ -45,9 +48,12 @@ export const TOOLS: ToolDef[] = [
   { id: 'bmi', name: 'BMI 计算', icon: '⚖️', category: '计算', desc: '体重健康指数', component: BMI },
   { id: 'age', name: '年龄计算', icon: '🎂', category: '计算', desc: '周岁/虚岁/生活天数', component: AgeCalc },
   { id: 'date', name: '日期计算', icon: '📅', category: '计算', desc: '相差天数/加减天数', component: DateCalc },
-  { id: 'countdown', name: '纪念日倒计时', icon: '⏳', category: '计算', desc: '还有 N 天/已过 N 天', component: Countdown },
+  { id: 'countdown', name: '纪念日倒计时', icon: '⏳', category: '计算', desc: '本地保存/快捷日期', component: Countdown },
+  { id: 'electric', name: '电费计算', icon: '⚡', category: '计算', desc: '电器功率算电费', component: ElectricBill },
   { id: 'text', name: '文本工具', icon: '📝', category: '文本', desc: '去重/替换/统计', component: TextTools },
   { id: 'case', name: '大小写转换', icon: '🔠', category: '文本', desc: '驼峰/下划线等', component: CaseConvert },
+  { id: 'regex', name: '正则测试', icon: '🔤', category: '文本', desc: '实时匹配/标志切换', component: RegexTester },
+  { id: 'morse', name: '摩斯电码', icon: '📡', category: '文本', desc: '编码/解码互转', component: Morse },
   { id: 'codec', name: '编解码工具', icon: '🔐', category: '编码', desc: 'Base64 / URL', component: Codec },
   { id: 'json', name: 'JSON 格式化', icon: '🧾', category: '编码', desc: '格式化/压缩校验', component: JsonFmt },
   { id: 'random', name: '随机数/密码', icon: '🎲', category: '生成', desc: '随机数与强密码', component: RandomTools },
