@@ -21,15 +21,17 @@
     "js-sha256": "^1.0.0",
     "lunar-typescript": "^1.8.6",
     "mathjs": "^15.2.0",
+    "ncmdump-js": "^0.0.3",
     "pako": "^3.0.2",
     "pinyin-pro": "^3.29.5",
     "qrcode-generator": "^2.0.4",
     "react": "19.3.0",
     "react-native": "0.88.0",
     "react-native-blob-util": "^0.25.1",
+    "react-native-document-picker": "^9.3.1",
     "react-native-image-picker": "^8.3.0",
     "react-native-safe-area-context": "^5.5.2",
-    "react-native-sensors": "^7.3.6"
+    "react-native-svg": "^15.16.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

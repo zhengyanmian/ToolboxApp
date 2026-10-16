@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import ImageResizer from '@bam.tech/react-native-image-resizer';
 import { CameraRoll } from '@react-native-camera-roll/camera-roll';
@@ -24,6 +24,7 @@ export default function ImageCompress({ onBack }: { onBack: () => void }) {
   const [busy, setBusy] = useState(false);
   const [out, setOut] = useState<{ uri: string; size: number; width: number; height: number } | null>(null);
   const [msg, setMsg] = useState('');
+  const [saved, setSaved] = useState(false);
 
   const pick = () => {
     launchImageLibrary({ mediaType: 'photo', selectionLimit: 1 }, (res) => {
@@ -32,14 +33,15 @@ export default function ImageCompress({ onBack }: { onBack: () => void }) {
         setSrc({ uri: a.uri || '', size: a.fileSize, width: a.width, height: a.height });
         setOut(null);
         setMsg('');
+        setSaved(false);
       }
     });
   };
 
-  const run = async () => {
-    if (!src?.uri || busy) return;
+  // 选项或图片变化 → 实时压缩预览（防抖 500ms）
+  const estimate = useCallback(async () => {
+    if (!src?.uri) return;
     setBusy(true);
-    setMsg('');
     try {
       const r = await ImageResizer.createResizedImage(
         src.uri,
@@ -58,19 +60,29 @@ export default function ImageCompress({ onBack }: { onBack: () => void }) {
     } finally {
       setBusy(false);
     }
-  };
+  }, [src, maxW, quality, fmt]);
+
+  useEffect(() => {
+    if (!src) return;
+    const t = setTimeout(estimate, 500);
+    return () => clearTimeout(t);
+  }, [estimate]);
 
   const save = async () => {
     if (!out) return;
     try {
       await CameraRoll.save(out.uri, { type: 'photo', album: '工具箱' });
       setMsg('已保存到相册「工具箱」');
+      setSaved(true);
     } catch (e: any) {
       setMsg('保存失败：' + (e?.message || '请确认已授予相册权限'));
     }
   };
 
-  const saved = out && src?.size ? Math.max(0, Math.round((1 - out.size / src.size) * 100)) : null;
+  const delta =
+    out && src?.size
+      ? Math.round((1 - out.size / src.size) * 100)
+      : null;
 
   return (
     <Page id="imgcompress" title="图片压缩 / 格式转换" onBack={onBack}>
@@ -78,7 +90,7 @@ export default function ImageCompress({ onBack }: { onBack: () => void }) {
         <Btn text={src ? '重新选图' : '从相册选图'} onPress={pick} />
         {src && (
           <>
-            <Image source={{ uri: src.uri }} style={st.preview} resizeMode="contain" />
+            <Image source={{ uri: out?.uri || src.uri }} style={st.preview} resizeMode="contain" />
             <Text style={st.meta}>
               原图 {fmtSize(src.size)} · {src.width}×{src.height}
             </Text>
@@ -109,30 +121,33 @@ export default function ImageCompress({ onBack }: { onBack: () => void }) {
             </Row>
           </Card>
 
-          <Btn text={busy ? '处理中…' : '开始处理'} onPress={run} />
-          {msg ? <Text style={st.msg}>{msg}</Text> : null}
+          {/* 实时输出大小 */}
+          <Card style={{ alignItems: 'center', paddingVertical: 18 }}>
+            {busy ? (
+              <Text style={st.estimating}>计算中…</Text>
+            ) : out ? (
+              <>
+                <Text style={st.estLabel}>预计输出大小</Text>
+                <Text style={st.estValue}>{fmtSize(out.size)}</Text>
+                <Text style={st.estMeta}>
+                  {out.width}×{out.height}
+                  {delta !== null && delta >= 0 ? ` · 比原图省 ${delta}%` : delta !== null ? ` · 比原图大 ${-delta}%` : ''}
+                </Text>
+              </>
+            ) : null}
+          </Card>
 
-          {out && (
-            <Card style={{ marginTop: 12 }}>
-              <Image source={{ uri: out.uri }} style={st.preview} resizeMode="contain" />
-              <Text style={st.meta}>
-                结果 {fmtSize(out.size)} · {out.width}×{out.height}
-                {saved !== null ? ` · 比原图省 ${saved}%` : ''}
-              </Text>
-              <Row>
-                <Btn text="保存到相册" onPress={save} />
-              </Row>
-            </Card>
-          )}
+          <Row>
+            <Btn text={busy ? '计算中…' : '保存到相册'} onPress={save} />
+          </Row>
+          {msg ? <Text style={st.msg}>{msg}</Text> : null}
         </>
       )}
 
       <Card style={{ marginTop: 12 }}>
-        <ScrollView>
-          <Text style={st.tip}>
-            选图后按目标尺寸、质量和格式重新编码：发朋友圈/传群前把大图压到 1080+85 通常体积减 70% 以上。JPEG 有损适合照片；PNG 无损适合截图和文字；WEBP 体积最小，新系统都支持。结果保存在相册「工具箱」。
-          </Text>
-        </ScrollView>
+        <Text style={st.tip}>
+          切换任何参数都会实时重新编码并显示输出大小（真实计算而非估算）。发朋友圈/传群前把大图压到 1080 + 85，体积通常减 70% 以上。JPEG 有损适合照片；PNG 无损适合截图文字；WEBP 体积最小。结果保存在相册「工具箱」。
+        </Text>
       </Card>
     </Page>
   );
@@ -143,5 +158,9 @@ const st = StyleSheet.create({
   meta: { fontSize: 12, color: C.sub, marginTop: 8, textAlign: 'center' },
   label: { fontSize: 13, color: C.sub, marginBottom: 8 },
   msg: { fontSize: 13, color: C.ok, textAlign: 'center', marginTop: 10 },
+  estLabel: { fontSize: 13, color: C.sub },
+  estValue: { fontSize: 34, fontWeight: '800', color: C.primary, marginTop: 4, fontVariant: ['tabular-nums'] },
+  estMeta: { fontSize: 12, color: C.sub, marginTop: 4 },
+  estimating: { fontSize: 15, color: C.sub },
   tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
 });

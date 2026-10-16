@@ -46,6 +46,8 @@ import ScreenClock from './tools/screenClock';
 import ImageCompress from './tools/imageCompress';
 import ImageScramble from './tools/imageScramble';
 import MetalDetector from './tools/metalDetector';
+import PrismTank from './tools/prismTank';
+import NcmTool from './tools/ncmTool';
 
 export type ToolDef = {
   id: string;
@@ -56,7 +58,7 @@ export type ToolDef = {
   component: React.ComponentType<{ onBack: () => void }>;
 };
 
-export const CATEGORIES = ['计算', '文本', '编码', '生成', '查询', '图片', '设备', '生活'];
+export const CATEGORIES = ['计算', '文本', '编码', '生成', '查询', '图片', '音频', '设备', '生活'];
 
 export const TOOLS: ToolDef[] = [
   { id: 'calculator', name: '计算器', icon: '🧮', category: '计算', desc: '支持函数与阶乘', component: Calculator },
@@ -102,6 +104,8 @@ export const TOOLS: ToolDef[] = [
   { id: 'http', name: 'HTTP 状态码', icon: '📡', category: '查询', desc: '含义速查/搜索', component: HttpStatus },
   { id: 'imgcompress', name: '图片压缩', icon: '🖼️', category: '图片', desc: '压缩/改格式/存相册', component: ImageCompress },
   { id: 'imgscramble', name: '图片混淆', icon: '🧩', category: '图片', desc: '乱序加密/同钥还原', component: ImageScramble },
+  { id: 'prism', name: '光棱坦克图片', icon: '🛡️', category: '图片', desc: '霓虹像素画生成器', component: PrismTank },
+  { id: 'ncm', name: 'NCM 音乐转换', icon: '🎵', category: '音频', desc: '本地转 MP3/FLAC', component: NcmTool },
   { id: 'metal', name: '金属探测仪', icon: '🧲', category: '设备', desc: '磁力计探测金属', component: MetalDetector },
   { id: 'pomodoro', name: '番茄钟', icon: '🍅', category: '生活', desc: '专注/休息循环', component: Pomodoro },
   { id: 'screenclock', name: '屏幕时钟', icon: '🕛', category: '生活', desc: '全屏时钟/常亮/农历', component: ScreenClock },
