@@ -67,6 +67,7 @@ export type IconName =
   | 'sun'
   | 'copy'
   | 'chevron'
+  | 'next'
   | 'close'
   | 'check'
   | 'plus'
@@ -79,6 +80,7 @@ export type IconName =
   | 'info'
   | 'star'
   | 'external'
+  | 'rotate'
   | 'dot';
 
 const s = (color: string) => ({ stroke: color, fill: 'none' as const });
@@ -453,6 +455,7 @@ const GLYPHS: Record<IconName, (c: string) => React.ReactNode> = {
     </>
   ),
   chevron: (c) => <Path d="M14.6 5.6 8.2 12l6.4 6.4" {...s(c)} />,
+  next: (c) => <Path d="M9.4 5.6 15.8 12l-6.4 6.4" {...s(c)} />,
   close: (c) => <Path d="M6.4 6.4l11.2 11.2M17.6 6.4 6.4 17.6" {...s(c)} />,
   check: (c) => <Path d="m5.4 12.6 4.4 4.4 9-9.6" {...s(c)} />,
   plus: (c) => <Path d="M12 5.4v13.2M5.4 12h13.2" {...s(c)} />,
@@ -493,6 +496,15 @@ const GLYPHS: Record<IconName, (c: string) => React.ReactNode> = {
       <Path d="M13.4 4.4h6.2v6.2" {...s(c)} />
       <Path d="M19.6 4.4 11 13" {...s(c)} />
       <Path d="M18 14.4v4.6a1.6 1.6 0 0 1-1.6 1.6H5.4a1.6 1.6 0 0 1-1.6-1.6V7.6A1.6 1.6 0 0 1 5.4 6h4.6" {...s(c)} />
+    </>
+  ),
+  // 屏幕旋转：手机 + 两侧旋转箭头
+  rotate: (c) => (
+    <>
+      <Rect x={7.6} y={4.6} width={8.8} height={14.8} rx={2.2} {...s(c)} />
+      <Path d="M12 17h.2" {...s(c)} />
+      <Path d="M4.4 8.2a3.4 3.4 0 0 1 3.4-2.6M19.6 15.8a3.4 3.4 0 0 1-3.4 2.6" {...s(c)} />
+      <Path d="M4.2 5.6v2.8h2.8M19.8 18.4v-2.8h-2.8" {...s(c)} />
     </>
   ),
 };

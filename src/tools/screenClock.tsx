@@ -166,14 +166,15 @@ export default function ScreenClock({ onBack }: { onBack: () => void }) {
       ) : null}
     </View>
   ) : (
-    <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
-      <Text style={[st.digit, digitStyle(effMain)]}>{main}</Text>
+    // alignItems:'baseline' 让秒与主数字共用同一条基线，秒字号放大也不会错位
+    <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+      <Text style={[st.digit, digitStyle(effMain), { includeFontPadding: false }]}>{main}</Text>
       {showSec ? (
         <Text
           style={[
             st.digit,
             digitStyle(effSec),
-            { marginLeft: Math.max(8, effMain * 0.06), marginBottom: effMain * 0.15 },
+            { includeFontPadding: false, marginLeft: Math.max(8, effMain * 0.06) },
           ]}>
           {sec}
         </Text>
@@ -268,7 +269,7 @@ export default function ScreenClock({ onBack }: { onBack: () => void }) {
         <View style={[st.bar, { backgroundColor: glass, borderColor: glassLine, shadowColor: p.cardShadow }]}>
           <IconBtn name="chevron" onPress={onBack} />
           <IconBtn
-            name="swap"
+            name="rotate"
             onPress={act(() => {
               const np = !portrait;
               setPortrait(np);

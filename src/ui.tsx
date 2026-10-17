@@ -127,6 +127,90 @@ export function Glow(props: {
 }
 
 /* ------------------------------------------------------------------ */
+/* 玻璃质感层：ColorOS 式「上亮下暗」高光 + 可选渐变底                  */
+/* ------------------------------------------------------------------ */
+let glassSeed = 0;
+
+export function GlassLayer(props: {
+  radius: number;
+  tone?: 'card' | 'button' | 'primary';
+  from?: string;
+  to?: string;
+}) {
+  const p = usePalette();
+  const id = useMemo(() => `gl${(glassSeed += 1)}`, []);
+  const tone = props.tone ?? 'card';
+
+  if (tone === 'primary') {
+    const from = props.from ?? p.primary2;
+    const to = props.to ?? p.primary;
+    return (
+      <View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, { borderRadius: props.radius, overflow: 'hidden' }]}>
+        <Svg width="100%" height="100%">
+          <Defs>
+            <LinearGradient id={id} x1="0" y1="0" x2="0.35" y2="1">
+              <Stop offset="0" stopColor={from} />
+              <Stop offset="1" stopColor={to} />
+            </LinearGradient>
+          </Defs>
+          <Rect x={0} y={0} width="100%" height="100%" fill={`url(#${id})`} />
+        </Svg>
+        {/* 顶部高光，做出立体玻璃感 */}
+        <View
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: 0,
+            height: '48%',
+            backgroundColor: 'rgba(255,255,255,0.18)',
+          }}
+        />
+      </View>
+    );
+  }
+
+  const top =
+    tone === 'button'
+      ? p.isDark
+        ? 0.075
+        : 0.5
+      : p.isDark
+      ? 0.055
+      : 0.36;
+  const bottom = p.isDark ? 0.015 : 0.08;
+
+  return (
+    <View
+      pointerEvents="none"
+      style={[StyleSheet.absoluteFill, { borderRadius: props.radius, overflow: 'hidden' }]}>
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: 0,
+          height: '46%',
+          backgroundColor: `rgba(255,255,255,${top})`,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: '30%',
+          backgroundColor: p.isDark ? `rgba(0,0,0,0.14)` : `rgba(255,255,255,${bottom})`,
+        }}
+      />
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* 通用按压组件：弹性缩放反馈                                          */
 /* ------------------------------------------------------------------ */
 export function Tap(props: {
@@ -170,13 +254,10 @@ export function Page(props: {
 }) {
   const p = usePalette();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
   const detail = props.id ? DETAILS[props.id] : undefined;
-  const backRef = useRef(props.onBack);
-  backRef.current = props.onBack;
 
+  // 进场动效：整页轻微上移淡入（只做一次，native 驱动）
   const enter = useRef(new Animated.Value(0)).current;
-  const tx = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.timing(enter, {
@@ -186,37 +267,6 @@ export function Page(props: {
       useNativeDriver: true,
     }).start();
   }, [enter]);
-
-  const pan = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_e, g) =>
-        !!backRef.current && g.dx > 10 && Math.abs(g.dy) < 26 && g.x0 < 44,
-      // 捕获阶段拦截：在 ScrollView 抢走手势前优先响应「左侧边缘右滑」
-      onMoveShouldSetPanResponderCapture: (_e, g) =>
-        !!backRef.current && g.dx > 14 && Math.abs(g.dy) < 30 && g.x0 < 40,
-      onPanResponderMove: (_e, g) => tx.setValue(Math.max(0, Math.min(width, g.dx))),
-      onPanResponderRelease: (_e, g) => {
-        if (g.dx > width * 0.26 || g.vx > 0.7) {
-          Animated.timing(tx, {
-            toValue: width,
-            duration: 190,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver: true,
-          }).start(() => backRef.current?.());
-        } else {
-          Animated.spring(tx, { toValue: 0, useNativeDriver: true, speed: 22, bounciness: 6 }).start();
-        }
-      },
-      onPanResponderTerminate: () =>
-        Animated.spring(tx, { toValue: 0, useNativeDriver: true }).start(),
-    }),
-  ).current;
-
-  const hintOpacity = tx.interpolate({
-    inputRange: [0, 90, width * 0.6],
-    outputRange: [0, 0.9, 1],
-    extrapolate: 'clamp',
-  });
 
   const body = (
     <>
@@ -241,80 +291,51 @@ export function Page(props: {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: p.bg }} {...pan.panHandlers}>
+    <View style={{ flex: 1, backgroundColor: p.bg }}>
       <Background />
       <Animated.View
         style={{
           flex: 1,
-          transform: [{ translateX: tx }],
+          opacity: enter,
+          transform: [
+            { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) },
+          ],
         }}>
-        <Animated.View
+        <View
           style={{
-            flex: 1,
-            opacity: enter,
-            transform: [
-              {
-                translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }),
-              },
-            ],
-          }}>
-          <View
-            style={{
-              paddingTop: insets.top + 6,
-              paddingBottom: 10,
-              paddingHorizontal: 8,
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: p.header,
-              borderBottomWidth: StyleSheet.hairlineWidth,
-              borderBottomColor: p.line,
-            }}>
-            {props.onBack ? (
-              <Tap onPress={props.onBack} style={s.back} hitSlop={10}>
-                <Icon name="chevron" size={21} color={p.text} strokeWidth={2.1} />
-              </Tap>
-            ) : (
-              <View style={s.back} />
-            )}
-            <Text style={{ flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '600', color: p.text }}>
-              {props.title}
-            </Text>
-            <View style={s.back}>{props.right}</View>
-          </View>
-          {props.scroll === false ? (
-            <View style={[{ flex: 1, padding: 14 }, props.contentStyle]}>{body}</View>
-          ) : (
-            <ScrollView
-              style={{ flex: 1 }}
-              contentContainerStyle={[{ padding: 14 }, props.contentStyle]}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}>
-              {body}
-            </ScrollView>
-          )}
-        </Animated.View>
-      </Animated.View>
-
-      {props.onBack ? (
-        <Animated.View
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            left: 0,
-            top: '46%',
-            opacity: hintOpacity,
+            paddingTop: insets.top + 6,
+            paddingBottom: 10,
+            paddingHorizontal: 8,
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: p.overlay,
-            borderTopRightRadius: 22,
-            borderBottomRightRadius: 22,
-            paddingVertical: 8,
-            paddingHorizontal: 12,
+            backgroundColor: p.header,
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomColor: p.line,
           }}>
-          <Icon name="chevron" size={18} color="#fff" strokeWidth={2.2} />
-          <Text style={{ color: '#fff', fontSize: 12, marginLeft: 2 }}>返回</Text>
-        </Animated.View>
-      ) : null}
+          {props.onBack ? (
+            <Tap onPress={props.onBack} style={s.back} hitSlop={10}>
+              <Icon name="chevron" size={21} color={p.text} strokeWidth={2.1} />
+            </Tap>
+          ) : (
+            <View style={s.back} />
+          )}
+          <Text style={{ flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '600', color: p.text }}>
+            {props.title}
+          </Text>
+          <View style={s.back}>{props.right}</View>
+        </View>
+        {props.scroll === false ? (
+          <View style={[{ flex: 1, padding: 14 }, props.contentStyle]}>{body}</View>
+        ) : (
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={[{ padding: 14 }, props.contentStyle]}
+            keyboardShouldPersistTaps="always"
+            showsVerticalScrollIndicator={false}>
+            {body}
+          </ScrollView>
+        )}
+      </Animated.View>
     </View>
   );
 }
@@ -329,30 +350,38 @@ export function Card(props: {
   pad?: number;
 }) {
   const p = usePalette();
+  const radius = 24;
   const style = [
     {
       backgroundColor: p.card,
-      borderRadius: 20,
+      borderRadius: radius,
       padding: props.pad ?? 15,
       marginBottom: 12,
+      overflow: 'hidden',
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: p.cardBorder,
       shadowColor: p.cardShadow,
       shadowOpacity: 1,
-      shadowRadius: 12,
-      shadowOffset: { width: 0, height: 4 },
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 6 },
       elevation: 2,
     },
     props.style,
   ];
+  const inner = (
+    <>
+      <GlassLayer radius={radius} tone="card" />
+      {props.children}
+    </>
+  );
   if (props.onPress) {
     return (
       <Tap onPress={props.onPress} style={style}>
-        {props.children}
+        {inner}
       </Tap>
     );
   }
-  return <View style={style}>{props.children}</View>;
+  return <View style={style}>{inner}</View>;
 }
 
 export function SectionTitle(props: { text: string; right?: React.ReactNode; style?: any }) {
@@ -410,6 +439,7 @@ export function Btn(props: {
   };
   const k = palette[kind];
   const sm = props.size === 'sm';
+  const radius = kind === 'ghost' ? 18 : 999;
   return (
     <Tap
       onPress={props.onPress}
@@ -423,15 +453,17 @@ export function Btn(props: {
           alignItems: 'center',
           justifyContent: 'center',
           gap: 6,
-          borderRadius: 14,
-          paddingVertical: sm ? 8 : 12,
-          paddingHorizontal: sm ? 12 : 16,
-          backgroundColor: k.bg,
+          borderRadius: radius,
+          paddingVertical: sm ? 8 : 13,
+          paddingHorizontal: sm ? 13 : 17,
+          overflow: 'hidden',
+          backgroundColor: kind === 'primary' ? 'transparent' : k.bg,
           borderWidth: StyleSheet.hairlineWidth,
           borderColor: k.border,
         },
         props.style,
       ]}>
+      <GlassLayer radius={radius} tone={kind === 'primary' ? 'primary' : 'button'} />
       {props.icon ? <Icon name={props.icon} size={sm ? 15 : 17} color={k.fg} /> : null}
       <Text style={{ color: k.fg, fontSize: sm ? 13.5 : 15, fontWeight: '600' }} numberOfLines={1}>
         {props.text}
@@ -459,12 +491,14 @@ export function Chip(props: {
           paddingHorizontal: 13,
           paddingVertical: 7,
           borderRadius: 999,
+          overflow: 'hidden',
           backgroundColor: props.active ? p.primary : p.chip,
           borderWidth: StyleSheet.hairlineWidth,
           borderColor: props.active ? p.primary : p.chipBorder,
         },
         props.style,
       ]}>
+      <GlassLayer radius={999} tone={props.active ? 'primary' : 'button'} />
       {props.icon ? (
         <Icon name={props.icon} size={14} color={props.active ? p.onPrimary : p.sub} />
       ) : null}
@@ -578,38 +612,66 @@ export function Toggle(props: { value: boolean; onChange: (v: boolean) => void; 
   const p = usePalette();
   const v = useRef(new Animated.Value(props.value ? 1 : 0)).current;
   useEffect(() => {
-    Animated.spring(v, { toValue: props.value ? 1 : 0, useNativeDriver: false, speed: 20, bounciness: 8 }).start();
+    // 开关颜色/位移用 JS 驱动；外层 Tap 的按压缩放是 native 驱动。
+    // 二者必须落在不同节点上，否则会抛 "JS driven animation on node moved to native" 崩溃。
+    Animated.spring(v, {
+      toValue: props.value ? 1 : 0,
+      useNativeDriver: false,
+      speed: 20,
+      bounciness: 8,
+    }).start();
   }, [props.value, v]);
+  const W = 58;
+  const H = 34;
+  const K = 28;
   return (
     <Tap
       onPress={() => props.onChange(!props.value)}
       style={[
         {
-          width: 48,
-          height: 28,
+          width: W,
+          height: H,
           borderRadius: 999,
           padding: 3,
-          backgroundColor: v.interpolate({
-            inputRange: [0, 1],
-            outputRange: [p.track, p.primary],
-          }),
+          overflow: 'hidden',
+          backgroundColor: p.track,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: p.isDark ? 'rgba(255,255,255,0.14)' : 'rgba(17,24,39,0.08)',
           justifyContent: 'center',
         },
         props.style,
       ]}>
+      {/* 开启时的主题色填充（独立节点，JS 驱动透明度） */}
+      <Animated.View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, { backgroundColor: p.primary, opacity: v }]}
+      />
+      {/* 顶部高光，营造玻璃质感 */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: 0,
+          height: '50%',
+          backgroundColor: p.isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.26)',
+        }}
+      />
       <Animated.View
         style={{
-          width: 22,
-          height: 22,
-          borderRadius: 11,
-          backgroundColor: '#fff',
+          width: K,
+          height: K,
+          borderRadius: K / 2,
+          backgroundColor: '#ffffff',
           transform: [
-            { translateX: v.interpolate({ inputRange: [0, 1], outputRange: [0, 20] }) },
+            { translateX: v.interpolate({ inputRange: [0, 1], outputRange: [0, W - K - 6] }) },
           ],
           shadowColor: '#000',
-          shadowOpacity: 0.2,
-          shadowRadius: 3,
-          elevation: 2,
+          shadowOpacity: 0.22,
+          shadowRadius: 4,
+          shadowOffset: { width: 0, height: 2 },
+          elevation: 3,
         }}
       />
     </Tap>
@@ -836,6 +898,7 @@ export function IconTile(props: {
 export function RoundButton(props: {
   icon: IconName;
   onPress: () => void;
+  onLongPress?: () => void;
   style?: any;
   size?: number;
 }) {
@@ -844,6 +907,7 @@ export function RoundButton(props: {
   return (
     <Tap
       onPress={props.onPress}
+      onLongPress={props.onLongPress}
       style={[
         {
           width: size,
@@ -851,15 +915,58 @@ export function RoundButton(props: {
           borderRadius: size / 2,
           alignItems: 'center',
           justifyContent: 'center',
+          overflow: 'hidden',
           backgroundColor: p.card,
           borderWidth: StyleSheet.hairlineWidth,
           borderColor: p.cardBorder,
         },
         props.style,
       ]}>
+      <GlassLayer radius={size / 2} tone="button" />
       <Icon name={props.icon} size={size * 0.48} color={p.text} />
     </Tap>
   );
+}
+
+/** 设置行：左侧标题+说明、右侧控件（ColorOS 设置页同款排布） */
+export function SettingRow(props: {
+  title: string;
+  desc?: string;
+  right?: React.ReactNode;
+  onPress?: () => void;
+  last?: boolean;
+  style?: any;
+}) {
+  const p = usePalette();
+  const body = (
+    <View
+      style={[
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 12,
+          paddingVertical: 13,
+          borderBottomWidth: props.last ? 0 : StyleSheet.hairlineWidth,
+          borderBottomColor: p.line,
+        },
+        props.style,
+      ]}>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 15, fontWeight: '600', color: p.text }}>{props.title}</Text>
+        {props.desc ? (
+          <Text style={{ fontSize: 12, color: p.sub, lineHeight: 17, marginTop: 3 }}>{props.desc}</Text>
+        ) : null}
+      </View>
+      {props.right}
+      {props.onPress && !props.right ? (
+        <Icon name="next" size={18} color={p.faint} strokeWidth={2} />
+      ) : null}
+    </View>
+  );
+  if (props.onPress) {
+    return <Tap onPress={props.onPress}>{body}</Tap>;
+  }
+  return body;
 }
 
 /** 数值大字展示 */

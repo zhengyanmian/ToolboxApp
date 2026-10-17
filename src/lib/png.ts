@@ -1,4 +1,35 @@
-import pako from 'pako';
+import * as pakoNS from 'pako';
+import { deflate as namedDeflate, inflate as namedInflate } from 'pako';
+
+/**
+ * pako 在不同打包解析路径下导出形态不同（命名导出 / default / CJS 整体导出），
+ * 这里逐个候选取值，避免在 Hermes 下拿到 undefined（曾导致「deflate 未定义」崩溃）。
+ */
+function pickFn(name: 'deflate' | 'inflate'): any {
+  const ns: any = pakoNS as any;
+  const candidates = [
+    name === 'deflate' ? namedDeflate : namedInflate,
+    ns?.[name],
+    ns?.default?.[name],
+    ns?.default,
+  ];
+  for (const c of candidates) {
+    if (typeof c === 'function') return c;
+  }
+  return null;
+}
+
+function deflate(raw: Uint8Array): Uint8Array {
+  const fn = pickFn('deflate');
+  if (!fn) throw new Error('压缩库不可用（pako.deflate 加载失败）');
+  return fn(raw, { level: 6 }) as Uint8Array;
+}
+
+function inflate(data: Uint8Array): Uint8Array {
+  const fn = pickFn('inflate');
+  if (!fn) throw new Error('解压库不可用（pako.inflate 加载失败）');
+  return fn(data) as Uint8Array;
+}
 
 // 最小 PNG 编解码（支持 8-bit 灰度/RGB/RGBA，仅用于本 App 的图片混淆工具）
 export type RawImage = { width: number; height: number; data: Uint8Array };
@@ -35,7 +66,7 @@ export function encodePng(img: RawImage): Uint8Array {
     raw.set(data.subarray(y * stride, (y + 1) * stride), y * (stride + 1) + 1);
   }
   // zlib 压缩
-  const compressed = pako.deflate(raw, { level: 6 }) as Uint8Array;
+  const compressed = deflate(raw);
 
   const ihdr = new Uint8Array(13);
   const dv = new DataView(ihdr.buffer);
@@ -86,7 +117,7 @@ export function decodePng(bytes: Uint8Array): RawImage {
   if (channels < 0) throw new Error('不支持的 PNG 颜色类型');
 
   const compressed = concat(idat);
-  const raw = pako.inflate(compressed) as Uint8Array;
+  const raw = inflate(compressed);
   const srcStride = width * channels;
   const data = new Uint8Array(width * height * 4);
 

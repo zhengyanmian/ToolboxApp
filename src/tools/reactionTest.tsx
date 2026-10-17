@@ -33,8 +33,9 @@ export default function ReactionTest({ onBack }: { onBack: () => void }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const greenAt = useRef(0);
   const armed = useRef(false); // 本轮是否由本次按压发起，避免多点触控误记成绩
-  const phase = useRef(new Animated.Value(0)).current; // 0 待机 1 等待 2 变绿 3 抢跑 4 成绩
+  // 注意：缩放动画用 native driver，背景色必须走普通 state（同一节点混用两种驱动会崩）
   const pop = useRef(new Animated.Value(1)).current;
+  const flash = useRef(new Animated.Value(0)).current;
 
   // 读取历史成绩
   useEffect(() => {
@@ -55,22 +56,19 @@ export default function ReactionTest({ onBack }: { onBack: () => void }) {
     timer.current = null;
   }, []);
 
-  const phaseIdx = state === 'idle' ? 0 : state === 'waiting' ? 1 : state === 'go' ? 2 : state === 'early' ? 3 : 4;
-
-  // 背景柔和过渡
-  useEffect(() => {
-    Animated.timing(phase, { toValue: phaseIdx, duration: 220, useNativeDriver: false }).start();
-  }, [phaseIdx, phase]);
-
-  // 变绿瞬间的弹性放大
+  // 变绿瞬间的弹性放大（仅缩放，走 native driver，单独一层节点）
   useEffect(() => {
     if (state !== 'go') return;
     pop.setValue(1);
-    Animated.sequence([
-      Animated.timing(pop, { toValue: 1.05, duration: 120, useNativeDriver: true }),
-      Animated.spring(pop, { toValue: 1, useNativeDriver: true, speed: 16, bounciness: 8 }),
+    flash.setValue(0.35);
+    Animated.parallel([
+      Animated.sequence([
+        Animated.timing(pop, { toValue: 1.04, duration: 90, useNativeDriver: true }),
+        Animated.spring(pop, { toValue: 1, useNativeDriver: true, speed: 18, bounciness: 7 }),
+      ]),
+      Animated.timing(flash, { toValue: 0, duration: 200, useNativeDriver: true }),
     ]).start();
-  }, [state, pop]);
+  }, [state, pop, flash]);
 
   const clearTimer = () => {
     if (timer.current) clearTimeout(timer.current);
@@ -81,11 +79,12 @@ export default function ReactionTest({ onBack }: { onBack: () => void }) {
     clearTimer();
     armed.current = true;
     setState('waiting');
-    const delay = 1200 + Math.random() * 2800;
+    // 0.9~2.9 秒随机，太长会让人误以为卡住；到点立刻切绿并同步震动
+    const delay = 900 + Math.random() * 2000;
     timer.current = setTimeout(() => {
       greenAt.current = Date.now();
       setState('go');
-      nativeVibrate('0,45'); // 变绿瞬间一次轻震
+      nativeVibrate('0,40'); // 变绿瞬间一次轻震，给出即时反馈
     }, delay);
   };
 
@@ -122,11 +121,7 @@ export default function ReactionTest({ onBack }: { onBack: () => void }) {
   const earlyBg = '#f59e0b';
   const doneBg = p.cardSolid;
 
-  const bgAnim = phase.interpolate({
-    inputRange: [0, 1, 2, 3, 4],
-    outputRange: [idleBg, waitBg, goBg, earlyBg, doneBg],
-    extrapolate: 'clamp',
-  });
+  const bg = state === 'idle' ? idleBg : state === 'waiting' ? waitBg : state === 'go' ? goBg : state === 'early' ? earlyBg : doneBg;
 
   const fg =
     state === 'done'
@@ -156,12 +151,16 @@ export default function ReactionTest({ onBack }: { onBack: () => void }) {
 
   return (
     <Page id="reaction" title="反应力测试" onBack={onBack}>
-      <Animated.View style={[st.area, { backgroundColor: bgAnim, transform: [{ scale: pop }] }]}>
+      <Animated.View style={[st.area, { backgroundColor: bg, transform: [{ scale: pop }] }]}>
         <Pressable
           style={StyleSheet.absoluteFill}
           onPressIn={onPressIn}
           onPressOut={onPressOut}
           android_disableSound
+        />
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { backgroundColor: '#ffffff', opacity: flash }]}
         />
         <View pointerEvents="none" style={st.center}>
           {state === 'done' ? (

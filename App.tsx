@@ -21,7 +21,6 @@ import {
   IconTile,
   RoundButton,
   SectionTitle,
-  Segmented,
   Tap,
 } from './src/ui';
 import { CATEGORY_COLORS, CATEGORIES, TOOLS, ToolDef } from './src/registry';
@@ -168,13 +167,11 @@ function Root() {
             ))
           )}
 
-          <Card style={{ marginTop: 14 }}>
-            <SectionTitle text="外观模式" style={{ marginTop: 0 }} />
-            <AppearanceControl />
-          </Card>
-
           <Text style={{ textAlign: 'center', color: p.faint, fontSize: 11.5, marginTop: 6 }}>
             原创开源 · 全部功能免费 · 数据不出本机
+          </Text>
+          <Text style={{ textAlign: 'center', color: p.faint, fontSize: 11, marginTop: 3 }}>
+            右上角点按切换深/浅色，长按恢复跟随系统
           </Text>
         </ScrollView>
       </View>
@@ -190,27 +187,13 @@ function Root() {
 
 function ThemeButton() {
   const p = usePalette();
-  const { isDark, toggle } = useTheme();
+  const { isDark, toggle, setMode, mode } = useTheme();
   return (
     <RoundButton
       icon={isDark ? 'moon' : 'sun'}
       onPress={toggle}
+      onLongPress={() => setMode(mode === 'system' ? (isDark ? 'light' : 'dark') : 'system')}
       style={{ borderColor: p.cardBorder }}
-    />
-  );
-}
-
-function AppearanceControl() {
-  const { mode, setMode, isDark } = useTheme();
-  return (
-    <Segmented
-      options={[
-        { label: '跟随系统', value: 'system' },
-        { label: isDark ? '暗色' : '深色', value: 'dark' },
-        { label: '浅色', value: 'light' },
-      ]}
-      value={mode}
-      onChange={(v) => setMode(v as any)}
     />
   );
 }
