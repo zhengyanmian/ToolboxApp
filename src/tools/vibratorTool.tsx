@@ -3,7 +3,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import {
   Btn,
   Card,
-  dynStyles,
+  Chip,
+  GlassLayer,
   Icon,
   Page,
   SectionTitle,
@@ -11,9 +12,10 @@ import {
   Slider,
   Tap,
   Toggle,
+  dynStyles,
 } from '../ui';
 import { usePalette } from '../theme';
-import { cancelVibrate, copyText, nativeVibrate } from '../native';
+import { cancelVibrate, nativeVibrate } from '../native';
 
 /** 预设节奏：与自定义面板共用同一播放/停止引擎 */
 const PRESETS: { label: string; desc: string; pattern: string }[] = [
@@ -53,6 +55,8 @@ const sumPattern = (s: string) =>
     .filter((n) => isFinite(n))
     .reduce((a, c) => a + c, 0);
 
+type Playing = { kind: 'custom' | 'preset'; key?: string } | null;
+
 export default function VibratorTool({ onBack }: { onBack: () => void }) {
   const p = usePalette();
 
@@ -61,34 +65,33 @@ export default function VibratorTool({ onBack }: { onBack: () => void }) {
   const [count, setCount] = useState(3);
   const [infinite, setInfinite] = useState(false);
   const [level, setLevel] = useState(3);
-  const [running, setRunning] = useState(false);
+  const [playing, setPlaying] = useState<Playing>(null);
   const [done, setDone] = useState(0);
-  const [presetKey, setPresetKey] = useState('');
-  const [copied, setCopied] = useState(false);
 
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const live = useRef(false);
   const cfg = useRef({ dur, gap, count, infinite, level });
   cfg.current = { dur, gap, count, infinite, level };
 
-  /** 统一下沉引擎：清定时器 + 取消原生震动 + 复位状态 */
   const stop = useCallback(() => {
     live.current = false;
     if (timer.current) {
       clearInterval(timer.current);
+      clearTimeout(timer.current as any);
       timer.current = null;
     }
     cancelVibrate();
-    setRunning(false);
+    setPlaying(null);
     setDone(0);
-    setPresetKey('');
   }, []);
 
-  /* 组件卸载时务必停掉循环并取消震动 */
   useEffect(
     () => () => {
       live.current = false;
-      if (timer.current) clearInterval(timer.current);
+      if (timer.current) {
+        clearInterval(timer.current);
+        clearTimeout(timer.current as any);
+      }
       cancelVibrate();
     },
     [],
@@ -97,18 +100,7 @@ export default function VibratorTool({ onBack }: { onBack: () => void }) {
   const burst = useMemo(() => buildBurst(dur, level), [dur, level]);
   const cycle = useMemo(() => cyclePattern(burst), [burst]);
 
-  const patternText = useMemo(() => {
-    if (presetKey) return presetKey;
-    if (infinite) return `${cycle}   (无限循环 · 间隔 ${gap}ms)`;
-    const seq: number[] = [0];
-    for (let c = 0; c < count; c++) {
-      burst.forEach((v) => seq.push(v));
-      if (c < count - 1) seq.push(gap);
-    }
-    return seq.join(',');
-  }, [presetKey, infinite, cycle, gap, count, burst]);
-
-  /** 自定义节奏：用 JS setInterval 周期调用 nativeVibrate 实现「无限循环」 */
+  /** 自定义节奏：JS 定时器逐拍下发，支持无限循环 */
   const startCustom = useCallback(() => {
     stop();
     const c = cfg.current;
@@ -116,16 +108,16 @@ export default function VibratorTool({ onBack }: { onBack: () => void }) {
     const period = Math.max(15, burstMs(b) + Math.max(0, c.gap));
     const one = cyclePattern(b);
     live.current = true;
-    setRunning(true);
+    setPlaying({ kind: 'custom' });
     setDone(0);
-    setPresetKey('');
     let n = 0;
-    // 首拍立即触发，之后按「单次时长 + 间隔」周期循环
     nativeVibrate(one);
     n = 1;
     setDone(1);
     if (!c.infinite && n >= c.count) {
-      stop();
+      setTimeout(() => {
+        if (live.current) stop();
+      }, burstMs(b) + 60);
       return;
     }
     timer.current = setInterval(() => {
@@ -142,57 +134,107 @@ export default function VibratorTool({ onBack }: { onBack: () => void }) {
     (pattern: string) => {
       stop();
       live.current = true;
-      setRunning(true);
-      setPresetKey(pattern);
+      setPlaying({ kind: 'preset', key: pattern });
       nativeVibrate(pattern);
-      timer.current = setTimeout(() => stop(), sumPattern(pattern) + 160);
+      timer.current = setTimeout(() => {
+        if (live.current) stop();
+      }, sumPattern(pattern) + 160);
     },
     [stop],
   );
 
-  const remaining = infinite ? Infinity : Math.max(0, count - done);
-  const progress = infinite ? 0 : count > 0 ? Math.min(1, done / count) : 0;
-  const stopText = running
-    ? presetKey
-      ? '停止震动'
-      : infinite
-      ? `停止震动 · 已震 ${done} 次`
-      : `停止震动 · 剩余 ${remaining} 次`
-    : '停止震动';
+  const toggleCustom = () => {
+    if (playing?.kind === 'custom') stop();
+    else startCustom();
+  };
+
+  const togglePreset = (pattern: string) => {
+    if (playing?.kind === 'preset' && playing.key === pattern) stop();
+    else playPattern(pattern);
+  };
+
+  const running = playing !== null;
+  const custom = playing?.kind === 'custom';
+  const remain = infinite ? Infinity : Math.max(0, count - done);
+
+  /** 预览：把「完整一遍」压缩进一条固定长度的轨道，次数变了脉冲密度就会变 */
+  const preview = useMemo(() => {
+    const maxGroups = 16;
+    const groups = Math.min(count, maxGroups);
+    const items: { ms: number; on: boolean }[] = [];
+    for (let c = 0; c < groups; c++) {
+      burst.forEach((v, i) => items.push({ ms: v, on: i % 2 === 0 }));
+      if (c < groups - 1) items.push({ ms: Math.max(1, gap), on: false });
+    }
+    const total = items.reduce((a, x) => a + x.ms, 0) || 1;
+    return { items, total, hidden: count > maxGroups ? count - maxGroups : 0 };
+  }, [burst, count, gap]);
 
   return (
     <Page id="vibrate" title="振动器" onBack={onBack}>
       <Card>
-        <Text style={st.tip}>
-          按「秒」级节奏驱动马达：可设定单次时长、间隔与次数，也可无限循环。强度由系统马达决定，本页控制的是节奏；部分机型为转子马达，振动偏弱属正常现象。
-        </Text>
-        <View style={{ marginTop: 12 }}>
-          <Btn
-            text={stopText}
-            kind="danger"
-            icon="close"
-            onPress={stop}
-            style={{ paddingVertical: 15 }}
-          />
-        </View>
-        {running && !presetKey ? (
-          <View style={{ marginTop: 12 }}>
-            <View style={[st.track, { backgroundColor: p.track }]}>
-              <View
-                style={[
-                  st.fill,
-                  {
-                    width: `${progress * 100}%`,
-                    backgroundColor: p.primary,
-                  },
-                ]}
-              />
-            </View>
-            <Text style={st.progressTxt}>
-              {infinite ? `已循环 ${done} 次（无限模式）` : `进度 ${done}/${count} 次`}
+        <View style={st.topRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[st.stateTitle, { color: running ? p.primary : p.text }]}>
+              {custom
+                ? infinite
+                  ? `无限循环中 · 第 ${done} 拍`
+                  : `震动中 · ${done}/${count} 次`
+                : playing?.kind === 'preset'
+                ? '预设节奏播放中'
+                : '准备就绪'}
+            </Text>
+            <Text style={[st.stateDesc, { color: p.sub }]}>
+              {running
+                ? custom
+                  ? infinite
+                    ? '点下面的按钮随时停下'
+                    : `还剩约 ${remain} 次`
+                  : '点下面的按钮可立即停下'
+                : '单次时长与间隔都由你决定，也可以无限循环'}
             </Text>
           </View>
+          <View
+            style={[
+              st.stateIcon,
+              {
+                backgroundColor: running ? p.primary : p.chip,
+                borderColor: running ? 'transparent' : p.chipBorder,
+              },
+            ]}>
+            <Icon name="bolt" size={19} color={running ? p.onPrimary : p.sub} />
+          </View>
+        </View>
+
+        {custom && !infinite ? (
+          <View style={[st.progressTrack, { backgroundColor: p.track }]}>
+            <View
+              style={[
+                st.progressFill,
+                {
+                  width: `${Math.min(100, (done / Math.max(1, count)) * 100)}%`,
+                  backgroundColor: p.primary,
+                },
+              ]}
+            />
+          </View>
         ) : null}
+
+        <Tap
+          onPress={toggleCustom}
+          style={[
+            st.bigBtn,
+            {
+              backgroundColor: custom ? p.warn : p.primary,
+              marginTop: 14,
+            },
+          ]}>
+          <GlassLayer radius={999} tone={custom ? 'danger' : 'primary'} />
+          <Icon name={custom ? 'close' : 'play'} size={19} color={custom ? p.warn : p.onPrimary} />
+          <Text style={[st.bigBtnText, { color: custom ? p.warn : p.onPrimary }]}>
+            {custom ? '停止震动' : '开始震动'}
+          </Text>
+        </Tap>
       </Card>
 
       <Card>
@@ -225,124 +267,139 @@ export default function VibratorTool({ onBack }: { onBack: () => void }) {
           format={(v) => `${Math.round(v)} 次`}
         />
 
-        <View style={st.rowBetween}>
-          <Text style={st.label}>强度档位（1 最轻 · 5 最强）</Text>
-          <Text style={st.value}>{level}</Text>
+        <View style={[st.rowBetween, { marginTop: 2 }]}>
+          <Text style={[st.label, { color: p.text }]}>强度档位</Text>
+          <Text style={[st.value, { color: p.primary }]}>{level} / 5</Text>
         </View>
         <Segmented
           options={[1, 2, 3, 4, 5].map((n) => ({ label: String(n), value: n }))}
           value={level}
           onChange={setLevel}
         />
-        <Text style={st.note}>
-          Android 无振幅接口时，档位通过把单次震动细分为多段脉冲来近似改变手感，总时长不变。
-        </Text>
 
-        <View style={[st.rowBetween, { marginTop: 12 }]}>
-          <Text style={st.label}>无限循环</Text>
+        <View style={[st.rowBetween, { marginTop: 14 }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={[st.label, { color: p.text, marginBottom: 0 }]}>无限循环</Text>
+            <Text style={[st.note, { color: p.faint, marginTop: 2 }]}>
+              一直震到你按停止为止
+            </Text>
+          </View>
           <Toggle value={infinite} onChange={setInfinite} />
         </View>
 
-        <View style={{ marginTop: 10 }}>
-          <Text style={st.label}>一个周期的节奏预览</Text>
-          <View style={st.prevRow}>
-            {burst.map((v, i) => (
+        <View style={{ marginTop: 16 }}>
+          <View style={[st.rowBetween, { marginBottom: 7 }]}>
+            <Text style={[st.label, { color: p.text, marginBottom: 0 }]}>节奏预览</Text>
+            <Text style={[st.value, { color: p.primary }]}>
+              {infinite ? `1 拍 ${burstMs(burst)}ms · 循环` : `${count} 次 · 共 ${(burstMs(burst) + gap) * count - gap}ms`}
+            </Text>
+          </View>
+          <View style={[st.track, { backgroundColor: p.chip, borderColor: p.chipBorder }]}>
+            {preview.items.map((it, i) => (
               <View
                 key={i}
                 style={{
-                  width: Math.max(3, Math.min(90, v / 16)),
-                  height: 12,
-                  borderRadius: 6,
-                  marginRight: 3,
-                  backgroundColor: i % 2 === 0 ? p.primary : p.track,
+                  flex: it.ms / preview.total,
+                  height: '100%',
+                  backgroundColor: it.on ? p.primary : 'transparent',
                 }}
               />
             ))}
-            {gap > 0 ? (
-              <View
-                style={{
-                  width: Math.max(3, Math.min(90, gap / 16)),
-                  height: 12,
-                  borderRadius: 6,
-                  backgroundColor: p.line,
-                }}
-              />
-            ) : null}
           </View>
-        </View>
-
-        <View style={st.codeBox}>
-          <Text selectable style={st.code}>
-            {patternText}
+          <Text style={[st.note, { color: p.faint }]}>
+            {preview.hidden > 0
+              ? `条带只画前 ${count - preview.hidden} 次，后面还有 ${preview.hidden} 次同样的节奏`
+              : '条带长度固定，脉冲越密表示同一段时间里震得越多次'}
           </Text>
-          <Tap
-            onPress={() => {
-              copyText(patternText);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 1200);
-            }}
-            style={st.copyBtn}>
-            <Icon name={copied ? 'check' : 'copy'} size={16} color={copied ? p.ok : p.faint} />
-          </Tap>
-        </View>
-
-        <View style={{ marginTop: 12 }}>
-          <Btn text="开始震动" icon="play" onPress={startCustom} />
         </View>
       </Card>
 
-      <SectionTitle text="预设节奏" />
+      <SectionTitle text="预设节奏" right={<Text style={[st.note, { color: p.faint, marginTop: 0 }]}>点一下开始，再点一下停止</Text>} />
       {PRESETS.map((x) => {
-        const on = presetKey === x.pattern;
+        const on = playing?.kind === 'preset' && playing.key === x.pattern;
         return (
-          <Card key={x.label} pad={13} style={{ marginBottom: 10 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={st.name}>{x.label}</Text>
-                <Text style={st.desc}>{x.desc}</Text>
+          <Card key={x.label} pad={12} style={{ marginBottom: 9 }}>
+            <Tap onPress={() => togglePreset(x.pattern)} style={st.presetRow}>
+              <View
+                style={[
+                  st.presetIcon,
+                  { backgroundColor: on ? p.primary : p.chip, borderColor: on ? 'transparent' : p.chipBorder },
+                ]}>
+                <Icon name={on ? 'pause' : 'play'} size={15} color={on ? p.onPrimary : p.sub} />
               </View>
-              <Btn
-                text={on ? '震动中' : '震动'}
-                size="sm"
-                fit
-                icon="play"
-                kind={on ? 'primary' : 'soft'}
-                onPress={() => playPattern(x.pattern)}
-              />
-            </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[st.name, { color: p.text }]}>{x.label}</Text>
+                <Text style={[st.desc, { color: p.sub }]}>{x.desc}</Text>
+              </View>
+              <Text style={[st.presetState, { color: on ? p.primary : p.faint }]}>
+                {on ? '停止' : '震动'}
+              </Text>
+            </Tap>
           </Card>
         );
       })}
+
+      <Card>
+        <Text style={[st.note, { color: p.sub, marginTop: 0 }]}>
+          强度档位通过把一次长震拆成多段短脉冲来近似改变手感，总时长不变；部分机型的马达是转子马达，
+          低频震感偏弱属正常现象。
+        </Text>
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+          <Chip text="停止一切震动" icon="close" onPress={stop} />
+          <Chip text="360ms 常震" icon="bolt" onPress={() => playPattern('0,360')} />
+        </View>
+      </Card>
     </Page>
   );
 }
 
 const st = dynStyles((C) =>
   StyleSheet.create({
-    tip: { fontSize: 12.5, lineHeight: 19, color: C.sub },
-    label: { fontSize: 12.5, fontWeight: '600', marginBottom: 6, color: C.text },
-    value: { fontSize: 12.5, fontWeight: '700', color: C.primary },
-    rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    note: { fontSize: 11.5, lineHeight: 17, marginTop: 8, color: C.faint },
-    prevRow: { flexDirection: 'row', alignItems: 'flex-end', flexWrap: 'wrap', gap: 0, marginTop: 2 },
-    codeBox: {
+    topRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    stateTitle: { fontSize: 16, fontWeight: '700' },
+    stateDesc: { fontSize: 12, marginTop: 3, lineHeight: 17 },
+    stateIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: StyleSheet.hairlineWidth,
+    },
+    progressTrack: { height: 6, borderRadius: 3, overflow: 'hidden', marginTop: 12 },
+    progressFill: { height: 6, borderRadius: 3 },
+    bigBtn: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'center',
       gap: 8,
-      borderRadius: 14,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: C.line,
-      backgroundColor: C.input,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      marginTop: 12,
+      height: 50,
+      borderRadius: 999,
+      overflow: 'hidden',
     },
-    code: { flex: 1, fontSize: 12, lineHeight: 18, color: C.sub },
-    copyBtn: { padding: 4 },
-    track: { height: 8, borderRadius: 4, overflow: 'hidden' },
-    fill: { height: 8, borderRadius: 4 },
-    progressTxt: { fontSize: 12, marginTop: 6, color: C.sub },
-    name: { fontSize: 15, fontWeight: '600', color: C.text },
-    desc: { fontSize: 12, marginTop: 2, color: C.sub },
+    bigBtnText: { fontSize: 15.5, fontWeight: '700' },
+    label: { fontSize: 12.5, fontWeight: '600', marginBottom: 6 },
+    value: { fontSize: 12.5, fontWeight: '700' },
+    rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    note: { fontSize: 11.5, lineHeight: 17, marginTop: 6 },
+    track: {
+      flexDirection: 'row',
+      height: 26,
+      borderRadius: 9,
+      overflow: 'hidden',
+      borderWidth: StyleSheet.hairlineWidth,
+    },
+    presetRow: { flexDirection: 'row', alignItems: 'center', gap: 11 },
+    presetIcon: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: StyleSheet.hairlineWidth,
+    },
+    presetState: { fontSize: 12.5, fontWeight: '700' },
+    name: { fontSize: 14.5, fontWeight: '600' },
+    desc: { fontSize: 12, marginTop: 2 },
   }),
 );

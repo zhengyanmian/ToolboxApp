@@ -6,18 +6,28 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Lunar } from 'lunar-typescript';
-import { dynStyles, Icon, Slider, Tap } from '../ui';
+import { Btn, dynStyles, Icon, Slider, Tap } from '../ui';
 import type { IconName } from '../icons';
 import { usePalette } from '../theme';
 import { setImmersive, setKeepScreenOn, setOrientation } from '../native';
 
 /** 预设字色（下标 0 代表「跟随主题」：浅色模式深字、深色模式浅字） */
-const PRESETS = ['#67e8f9', '#fcd34d', '#86efac', '#f9a8d4', '#f87171', '#a78bfa'];
+const PRESETS = [
+  '#67e8f9',
+  '#fcd34d',
+  '#86efac',
+  '#f9a8d4',
+  '#f87171',
+  '#a78bfa',
+  '#ffffff',
+  '#0ea5e9',
+];
 const WEEK = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
 /** 数字样式循环：常规 / 细体 / 斜体 / 描边发光感 */
@@ -43,6 +53,10 @@ export default function ScreenClock({ onBack }: { onBack: () => void }) {
   const [styleIdx, setStyleIdx] = useState(0);
   const [panel, setPanel] = useState<'size' | 'color' | null>(null);
   const [visible, setVisible] = useState(false);
+  /** 时钟自己的底色（跟 App 主题解耦：白天放桌上用白底更清楚） */
+  const [light, setLight] = useState(false);
+  const [custom, setCustom] = useState('');
+  const [hex, setHex] = useState('');
 
   const anim = useRef(new Animated.Value(0)).current;
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -127,7 +141,8 @@ export default function ScreenClock({ onBack }: { onBack: () => void }) {
     WEEK[now.getDay()]
   } · 农历${lunar.getMonthInChinese()}月${lunar.getDayInChinese()}`;
 
-  const clockColor = colorIdx === 0 ? (p.isDark ? '#f8fafc' : '#0b1220') : PRESETS[colorIdx - 1];
+  const autoColor = light ? '#0b1220' : '#f8fafc';
+  const clockColor = custom || (colorIdx === 0 ? autoColor : PRESETS[colorIdx - 1]);
   const ds = DIGIT_STYLES[styleIdx];
 
   /* 竖屏：每个字符独占一行，按可用高度自适应缩放；横屏：按可用宽度收敛，避免溢出 */
@@ -182,12 +197,16 @@ export default function ScreenClock({ onBack }: { onBack: () => void }) {
     </View>
   );
 
-  const glass = p.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.76)';
-  const glassLine = p.isDark ? 'rgba(255,255,255,0.16)' : 'rgba(17,24,39,0.08)';
-  const panelBg = p.isDark ? 'rgba(14,18,26,0.86)' : 'rgba(255,255,255,0.92)';
+  /** 工具条始终用「凝光」玻璃：随时钟底色反色，保证在纯黑/纯白底上都清楚 */
+  const darkUi = !light;
+  const glass = darkUi ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.85)';
+  const glassLine = darkUi ? 'rgba(255,255,255,0.14)' : 'rgba(17,24,39,0.08)';
+  const panelBg = darkUi ? 'rgba(16,20,28,0.9)' : 'rgba(255,255,255,0.94)';
+  const uiFg = darkUi ? '#eef2f8' : '#1f2937';
+  const uiSub = darkUi ? 'rgba(238,242,248,0.6)' : 'rgba(31,41,55,0.55)';
 
   return (
-    <View style={[st.root, { backgroundColor: p.isDark ? '#05070b' : '#ffffff' }]}>
+    <View style={[st.root, { backgroundColor: light ? '#f4f5f9' : '#04060a' }]}>
       <StatusBar hidden />
       {/* 任意处轻触呼出/隐藏工具条 */}
       <Pressable
@@ -242,32 +261,108 @@ export default function ScreenClock({ onBack }: { onBack: () => void }) {
         ) : null}
 
         {panel === 'color' ? (
-          <View style={[st.panel, st.colorPanel, { backgroundColor: panelBg, borderColor: glassLine }]}>
-            <Tap onPress={act(() => setColorIdx(0))} style={st.dotWrap}>
-              <View
-                style={[
-                  st.dotBig,
-                  { backgroundColor: p.isDark ? '#f8fafc' : '#0b1220' },
-                  colorIdx === 0 ? { borderColor: p.primary } : null,
-                ]}
-              />
-            </Tap>
-            {PRESETS.map((c, i) => (
-              <Tap key={c} onPress={act(() => setColorIdx(i + 1))} style={st.dotWrap}>
+          <View
+            style={[
+              st.panel,
+              { backgroundColor: panelBg, borderColor: glassLine, paddingBottom: 12 },
+            ]}>
+            <Text style={[st.panelLabel, { color: uiSub }]}>字色</Text>
+            <View style={st.colorRow}>
+              <Tap
+                onPress={act(() => {
+                  setCustom('');
+                  setColorIdx(0);
+                })}
+                style={st.dotWrap}>
                 <View
                   style={[
                     st.dotBig,
-                    { backgroundColor: c },
-                    colorIdx === i + 1 ? { borderColor: p.primary } : null,
+                    { backgroundColor: autoColor },
+                    (colorIdx === 0 && !custom) ? { borderColor: p.primary } : null,
                   ]}
                 />
               </Tap>
-            ))}
+              {PRESETS.map((c, i) => (
+                <Tap
+                  key={c}
+                  onPress={act(() => {
+                    setCustom('');
+                    setColorIdx(i + 1);
+                  })}
+                  style={st.dotWrap}>
+                  <View
+                    style={[
+                      st.dotBig,
+                      { backgroundColor: c },
+                      colorIdx === i + 1 && !custom ? { borderColor: p.primary } : null,
+                    ]}
+                  />
+                </Tap>
+              ))}
+            </View>
+
+            <View style={st.hexRow}>
+              <View style={[st.hexBox, { borderColor: glassLine }]}>
+                <TextInput
+                  value={hex}
+                  onChangeText={setHex}
+                  placeholder="#7dd3fc"
+                  placeholderTextColor={uiSub}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  style={[st.hexInput, { color: uiFg }]}
+                />
+                <View style={[st.hexPreview, { backgroundColor: /^#[0-9a-fA-F]{6}$/.test(hex) ? hex : uiSub }]} />
+              </View>
+              <Btn
+                text="用这个色"
+                size="sm"
+                fit
+                onPress={act(() => {
+                  if (/^#[0-9a-fA-F]{6}$/.test(hex)) setCustom(hex.toUpperCase());
+                })}
+              />
+            </View>
+
+            <View style={[st.bgRow, { borderTopColor: glassLine }]}>
+              <Text style={[st.panelLabel, { color: uiSub, marginBottom: 0 }]}>底色</Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Tap
+                  onPress={act(() => setLight(false))}
+                  style={[
+                    st.bgChip,
+                    { borderColor: !light ? p.primary : glassLine, backgroundColor: !light ? p.primarySoft : 'transparent' },
+                  ]}>
+                  <View style={[st.bgDot, { backgroundColor: '#06080d' }]} />
+                  <Text style={{ fontSize: 12.5, color: !light ? p.primary : uiFg, fontWeight: '600' }}>深色</Text>
+                </Tap>
+                <Tap
+                  onPress={act(() => setLight(true))}
+                  style={[
+                    st.bgChip,
+                    { borderColor: light ? p.primary : glassLine, backgroundColor: light ? p.primarySoft : 'transparent' },
+                  ]}>
+                  <View style={[st.bgDot, { backgroundColor: '#ffffff' }]} />
+                  <Text style={{ fontSize: 12.5, color: light ? p.primary : uiFg, fontWeight: '600' }}>浅色</Text>
+                </Tap>
+              </View>
+            </View>
           </View>
         ) : null}
 
-        <View style={[st.bar, { backgroundColor: glass, borderColor: glassLine, shadowColor: p.cardShadow }]}>
-          <IconBtn name="chevron" onPress={onBack} />
+        <View style={[st.bar, { backgroundColor: glass, borderColor: glassLine }]}>
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: '8%',
+              right: '8%',
+              top: 0,
+              height: StyleSheet.hairlineWidth * 2,
+              backgroundColor: darkUi ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.95)',
+            }}
+          />
+          <IconBtn name="chevron" onPress={onBack} dark={darkUi} />
           <IconBtn
             name="rotate"
             onPress={act(() => {
@@ -275,24 +370,37 @@ export default function ScreenClock({ onBack }: { onBack: () => void }) {
               setPortrait(np);
               setOrientation(np ? 'portrait' : 'landscape');
             })}
+            dark={darkUi}
           />
-          <IconBtn name="clock" active={!is24} onPress={act(() => setIs24((v) => !v))} />
-          <IconBtn name="timer" active={!showSec} onPress={act(() => setShowSec((v) => !v))} />
+          <IconBtn name="clock" active={!is24} onPress={act(() => setIs24((v) => !v))} dark={darkUi} />
+          <IconBtn name="timer" active={!showSec} onPress={act(() => setShowSec((v) => !v))} dark={darkUi} />
           <IconBtn
             name="palette"
             dot={clockColor}
             active={panel === 'color'}
             onPress={act(() => setPanel(panel === 'color' ? null : 'color'))}
+            dark={darkUi}
           />
           <IconBtn
             name="pen"
             active={styleIdx === DIGIT_STYLES.length - 1}
             onPress={act(() => setStyleIdx((i) => (i + 1) % DIGIT_STYLES.length))}
+            dark={darkUi}
+          />
+          <IconBtn
+            name={light ? 'sun' : 'moon'}
+            onPress={act(() => {
+              const nl = !light;
+              setLight(nl);
+              if (!custom) setColorIdx(0);
+            })}
+            dark={darkUi}
           />
           <IconBtn
             name="letters"
             active={panel === 'size'}
             onPress={act(() => setPanel(panel === 'size' ? null : 'size'))}
+            dark={darkUi}
           />
         </View>
       </Animated.View>
@@ -300,25 +408,47 @@ export default function ScreenClock({ onBack }: { onBack: () => void }) {
   );
 }
 
-/** 工具条上的小圆形玻璃图标按钮 */
-function IconBtn(props: { name: IconName; onPress: () => void; active?: boolean; dot?: string }) {
+/** 工具条上的小圆形玻璃图标按钮（ColorOS 凝光质感：柔和渐变 + 发丝高光，无投影） */
+function IconBtn(props: {
+  name: IconName;
+  onPress: () => void;
+  active?: boolean;
+  dot?: string;
+  dark?: boolean;
+}) {
   const p = usePalette();
+  const dark = props.dark !== false;
   const bg = props.active
-    ? p.isDark
+    ? dark
       ? 'rgba(255,255,255,0.24)'
-      : 'rgba(47,107,255,0.18)'
-    : p.isDark
-    ? 'rgba(255,255,255,0.10)'
-    : 'rgba(255,255,255,0.72)';
-  const fg = props.active ? (p.isDark ? '#ffffff' : p.primary) : p.isDark ? '#eef2f8' : '#1f2937';
+      : 'rgba(47,107,255,0.16)'
+    : dark
+    ? 'rgba(255,255,255,0.09)'
+    : 'rgba(255,255,255,0.85)';
+  const fg = props.active ? (dark ? '#ffffff' : p.primary) : dark ? '#eef2f8' : '#1f2937';
   return (
     <Tap
       onPress={props.onPress}
       scaleTo={0.9}
       style={[
         st.ibtn,
-        { backgroundColor: bg, borderColor: p.isDark ? 'rgba(255,255,255,0.18)' : 'rgba(17,24,39,0.10)' },
+        {
+          backgroundColor: bg,
+          borderColor: dark ? 'rgba(255,255,255,0.13)' : 'rgba(17,24,39,0.08)',
+        },
       ]}>
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          left: 3,
+          right: 3,
+          top: 0,
+          height: StyleSheet.hairlineWidth * 2,
+          borderRadius: 2,
+          backgroundColor: dark ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.95)',
+        }}
+      />
       {props.dot ? <View style={[st.dot, { backgroundColor: props.dot }]} /> : null}
       <Icon name={props.name} size={18} color={fg} />
     </Tap>
@@ -347,27 +477,50 @@ const st = dynStyles(() =>
       paddingVertical: 8,
       borderRadius: 999,
       borderWidth: StyleSheet.hairlineWidth,
-      shadowOpacity: 0.8,
-      shadowRadius: 14,
-      shadowOffset: { width: 0, height: 6 },
-      elevation: 6,
+      overflow: 'hidden',
     },
     panel: {
-      width: 316,
+      width: 330,
       borderRadius: 20,
       paddingHorizontal: 14,
       paddingTop: 12,
       paddingBottom: 6,
       marginBottom: 10,
       borderWidth: StyleSheet.hairlineWidth,
+      overflow: 'hidden',
     },
-    colorPanel: {
+    panelLabel: { fontSize: 11.5, fontWeight: '600', marginBottom: 8 },
+    colorRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 2 },
+    hexRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
+    hexBox: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      borderRadius: 12,
+      borderWidth: StyleSheet.hairlineWidth,
+      paddingHorizontal: 10,
+    },
+    hexInput: { flex: 1, fontSize: 14, paddingVertical: 7, letterSpacing: 0.5 },
+    hexPreview: { width: 18, height: 18, borderRadius: 6 },
+    bgRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: 10,
-      paddingBottom: 10,
+      marginTop: 12,
+      paddingTop: 12,
+      borderTopWidth: StyleSheet.hairlineWidth,
     },
+    bgChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 11,
+      paddingVertical: 6,
+      borderRadius: 999,
+      borderWidth: StyleSheet.hairlineWidth,
+    },
+    bgDot: { width: 14, height: 14, borderRadius: 7, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(128,128,128,0.5)' },
     ibtn: {
       width: 38,
       height: 38,

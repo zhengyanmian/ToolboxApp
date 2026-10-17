@@ -8,7 +8,7 @@ import React, {
   useState,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Appearance } from 'react-native';
+import { Animated, Appearance, Easing, StyleSheet, View } from 'react-native';
 
 /**
  * 设计系统：双主题调色板（亮色 / 暗色）。
@@ -56,9 +56,9 @@ export const lightPalette: Palette = {
   bgBottom: '#eaedf5',
   bgGlow: '#cfe0ff',
   header: 'rgba(252,253,255,0.86)',
-  card: 'rgba(255,255,255,0.82)',
+  card: 'rgba(255,255,255,0.86)',
   cardSolid: '#ffffff',
-  cardBorder: 'rgba(255,255,255,0.9)',
+  cardBorder: 'rgba(15,23,42,0.06)',
   cardShadow: 'rgba(24,40,80,0.10)',
   text: '#111827',
   sub: '#5f6b7c',
@@ -72,7 +72,7 @@ export const lightPalette: Palette = {
   warn: '#e5484d',
   info: '#2f6bff',
   chip: 'rgba(255,255,255,0.78)',
-  chipBorder: 'rgba(17,24,39,0.08)',
+  chipBorder: 'rgba(15,23,42,0.07)',
   input: 'rgba(255,255,255,0.92)',
   overlay: 'rgba(17,24,39,0.28)',
   glowA: '#7bb0ff',
@@ -88,9 +88,9 @@ export const darkPalette: Palette = {
   bgBottom: '#05070b',
   bgGlow: '#1c3358',
   header: 'rgba(10,14,20,0.80)',
-  card: 'rgba(255,255,255,0.055)',
+  card: 'rgba(255,255,255,0.05)',
   cardSolid: '#141a24',
-  cardBorder: 'rgba(255,255,255,0.10)',
+  cardBorder: 'rgba(255,255,255,0.07)',
   cardShadow: 'rgba(0,0,0,0.5)',
   text: '#eef2f8',
   sub: '#98a3b3',
@@ -191,10 +191,50 @@ export function ThemeProvider(props: { children: React.ReactNode }) {
   const p = dark ? darkPalette : lightPalette;
   currentPalette = p;
 
-  const setMode = useCallback((m: Mode) => {
+  /* 主题切换过渡：先用目标背景色铺满（淡入），在完全盖住时换色，再淡出。
+     这样切换不会「硬闪一下」，观感接近系统级的溶入过渡。 */
+  const fade = useRef(new Animated.Value(0)).current;
+  const busy = useRef(false);
+  const [veil, setVeil] = useState<Palette | null>(null);
+
+  const persist = useCallback((m: Mode) => {
     setModeState(m);
     AsyncStorage.setItem(KEY, m).catch(() => {});
   }, []);
+
+  const setMode = useCallback(
+    (m: Mode) => {
+      if (busy.current) return;
+      const nextDark =
+        m === 'dark' || (m === 'system' && (Appearance.getColorScheme() ?? 'light') === 'dark');
+      if (nextDark === dark) {
+        persist(m);
+        return;
+      }
+      busy.current = true;
+      setVeil(nextDark ? darkPalette : lightPalette);
+      Animated.timing(fade, {
+        toValue: 1,
+        duration: 165,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }).start(() => {
+        persist(m);
+        setTimeout(() => {
+          Animated.timing(fade, {
+            toValue: 0,
+            duration: 235,
+            easing: Easing.in(Easing.quad),
+            useNativeDriver: true,
+          }).start(() => {
+            busy.current = false;
+            setVeil(null);
+          });
+        }, 40);
+      });
+    },
+    [dark, persist, fade],
+  );
 
   const value = useMemo<ThemeCtx>(
     () => ({
@@ -207,7 +247,20 @@ export function ThemeProvider(props: { children: React.ReactNode }) {
     [p, mode, dark, setMode],
   );
 
-  return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={value}>
+      <View style={{ flex: 1, backgroundColor: p.bg }}>
+        {props.children}
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
+            { backgroundColor: (veil ?? p).bg, opacity: fade },
+          ]}
+        />
+      </View>
+    </Ctx.Provider>
+  );
 }
 
 export function useTheme(): ThemeCtx {

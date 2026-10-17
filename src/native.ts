@@ -17,6 +17,9 @@ type ToolboxNative = {
   getDeviceInfo(): Promise<Record<string, unknown>>;
   copyText(text: string): void;
   saveToDownloads(srcPath: string, displayName: string, mime: string): Promise<string>;
+  openFile(path: string, mime: string): Promise<string>;
+  openFolder(path: string): Promise<string>;
+  listOpenWith(path: string, mime: string): Promise<string>;
 };
 
 const native: ToolboxNative | undefined = NativeModules.ToolboxNative as any;
@@ -159,4 +162,41 @@ export async function saveToDownloads(
 ): Promise<string> {
   if (!native?.saveToDownloads) throw new Error('当前设备不支持写入下载目录');
   return await native.saveToDownloads(srcPath, displayName, mime);
+}
+
+/**
+ * 用系统里已安装的应用打开单个文件。
+ * path 支持绝对路径 / content:// / 相对路径「Download/xxx.mp3」。
+ * 原生方法缺失时返回中文提示而不抛错；原生失败则抛中文 Error，调用方需 try/catch。
+ */
+export async function openFile(path: string, mime: string): Promise<string> {
+  if (!native?.openFile) return '当前设备不支持直接打开文件';
+  try {
+    return await native.openFile(path, mime);
+  } catch (e: any) {
+    throw new Error(e?.message || '没有可以打开该文件的应用');
+  }
+}
+
+/**
+ * 跳到文件所在目录（原生会逐个尝试 DocumentsUI / 下载列表 / 文件管理器首页）。
+ * 原生方法缺失时返回中文提示而不抛错；全部候选失败时抛中文 Error。
+ */
+export async function openFolder(path: string): Promise<string> {
+  if (!native?.openFolder) return '当前设备不支持打开文件夹';
+  try {
+    return await native.openFolder(path);
+  } catch (e: any) {
+    throw new Error(e?.message || '此设备没有可用的文件管理器');
+  }
+}
+
+/** 弹出系统「选择应用打开」选择器 */
+export async function openWith(path: string, mime: string): Promise<string> {
+  if (!native?.listOpenWith) return '当前设备不支持「用其他应用打开」';
+  try {
+    return await native.listOpenWith(path, mime);
+  } catch (e: any) {
+    throw new Error(e?.message || '没有可以打开该文件的应用');
+  }
 }

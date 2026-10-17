@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
-import { Card, Chip, Icon, Page, Segmented, Tap, dynStyles } from '../ui';
+import { Card, Chip, DateField, Icon, Page, Segmented, Tap, dynStyles } from '../ui';
 import { usePalette } from '../theme';
 
 const DAY = 86400000;
@@ -76,24 +76,24 @@ function DTInput(props: {
         </View>
       </View>
       <View style={{ flexDirection: 'row', gap: 8 }}>
-        <TextInput
-          style={[st.input, { flex: 1.5 }]}
-          value={props.date}
-          onChangeText={(v) => props.onDate(autoDate(v))}
-          placeholder="2026-10-16"
-          placeholderTextColor={p.faint}
-          keyboardType="numbers-and-punctuation"
-          maxLength={10}
-        />
-        <TextInput
-          style={[st.input, { flex: 1 }]}
-          value={props.time}
-          onChangeText={(v) => props.onTime(autoTime(v))}
-          placeholder="08:30"
-          placeholderTextColor={p.faint}
-          keyboardType="numbers-and-punctuation"
-          maxLength={8}
-        />
+        <View style={{ flex: 1.4 }}>
+          <DateField
+            value={props.date}
+            onChange={props.onDate}
+            mode="date"
+            placeholder="选择日期"
+            style={{ marginBottom: 0 }}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <DateField
+            value={props.time}
+            onChange={props.onTime}
+            mode="time"
+            placeholder="选择时间"
+            style={{ marginBottom: 0 }}
+          />
+        </View>
       </View>
     </View>
   );

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, Result, C, dynStyles} from '../ui';
+import { Page, Card, DateField, Result, C, dynStyles} from '../ui';
 import { Text, StyleSheet } from 'react-native';
 import { Lunar, Solar } from 'lunar-typescript';
 
@@ -33,7 +33,7 @@ export default function LunarTool({ onBack }: { onBack: () => void }) {
   return (
     <Page id="lunar" title="农历 / 黄历" onBack={onBack}>
       <Card>
-        <Field label="公历日期" value={date} onChange={setDate} placeholder="2026-10-16" />
+        <DateField label="公历日期" value={date} onChange={setDate} mode="date" />
       </Card>
       {err ? (
         <Card><Text style={st.err}>{err}</Text></Card>

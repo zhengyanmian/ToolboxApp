@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import DocumentPicker from 'react-native-document-picker';
 import ReactNativeBlobUtil from 'react-native-blob-util';
@@ -7,7 +7,7 @@ import { Btn, Card, Icon, Loading, Page, Result, Row, SectionTitle, dynStyles } 
 import { usePalette } from '../theme';
 import { installBrowserPolyfills } from '../lib/polyfills';
 import { base64ToBytes, bytesToBase64 } from '../lib/imgio';
-import { copyText, saveToDownloads } from '../native';
+import { copyText, openFolder, openWith, saveToDownloads } from '../native';
 
 type Info = {
   file: string;
@@ -15,7 +15,11 @@ type Info = {
   album: string;
   format: string;
   size: number;
+  /** 展示 + 复制用的路径 */
   path: string;
+  /** 真正交给原生打开用的绝对路径（content:// 也可） */
+  absPath: string;
+  mime: string;
   /** downloads = 系统下载目录；cache = 回退到应用缓存 */
   where: 'downloads' | 'cache';
 };
@@ -39,6 +43,41 @@ export default function NcmTool({ onBack }: { onBack: () => void }) {
   const [err, setErr] = useState('');
   const [info, setInfo] = useState<Info | null>(null);
   const [copied, setCopied] = useState(false);
+  const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    };
+  }, []);
+
+  /** 2 秒后自动消失的页面内提示 */
+  const showToast = (text: string, ok = true) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ text, ok });
+    toastTimer.current = setTimeout(() => setToast(null), 2200);
+  };
+
+  const doOpenWith = async () => {
+    if (!info) return;
+    try {
+      const r = await openWith(info.absPath, info.mime);
+      showToast(r || '已打开');
+    } catch (e: any) {
+      showToast(e?.message ? String(e.message) : '没有可以打开该文件的应用', false);
+    }
+  };
+
+  const doOpenFolder = async () => {
+    if (!info) return;
+    try {
+      const r = await openFolder(info.absPath);
+      showToast(r || '已打开文件管理器');
+    } catch (e: any) {
+      showToast(e?.message ? String(e.message) : '此设备没有可用的文件管理器', false);
+    }
+  };
 
   const pick = async () => {
     if (busy) return;
@@ -97,12 +136,17 @@ export default function NcmTool({ onBack }: { onBack: () => void }) {
       setStep('正在写入临时文件…');
       await ReactNativeBlobUtil.fs.writeFile(tmpAudio, bytesToBase64(r.audio), 'base64');
 
+      // saveToDownloads 只回相对的「Download/文件名」，这里补成可复制的绝对路径
+      const dlDir = String(ReactNativeBlobUtil.fs.dirs.DownloadDir || '').replace(/\/+$/, '');
+
       setStep('正在保存到系统下载目录…');
       let saved = '';
+      let absPath = '';
       let where: Info['where'] = 'downloads';
       try {
-        const path = await saveToDownloads(tmpAudio, outName, mime);
-        saved = path && path.trim() ? path : `Download/${outName}`;
+        const rel = await saveToDownloads(tmpAudio, outName, mime);
+        absPath = dlDir ? `${dlDir}/${outName}` : rel && rel.trim() ? rel : `Download/${outName}`;
+        saved = absPath;
         // 搬移成功，删除临时文件
         await ReactNativeBlobUtil.fs.unlink(tmpAudio).catch(() => {});
         tmpAudio = '';
@@ -119,6 +163,7 @@ export default function NcmTool({ onBack }: { onBack: () => void }) {
           });
         } catch {}
         saved = tmpAudio;
+        absPath = tmpAudio;
       }
 
       setInfo({
@@ -128,6 +173,8 @@ export default function NcmTool({ onBack }: { onBack: () => void }) {
         format: ext.toUpperCase(),
         size: r.audio.length,
         path: saved,
+        absPath,
+        mime,
         where,
       });
       setMsg(
@@ -184,28 +231,46 @@ export default function NcmTool({ onBack }: { onBack: () => void }) {
           <Result label="输出格式" value={info.format} copyable={false} />
           <Result label="文件大小" value={fmtSize(info.size)} copyable={false} />
           <Result label="保存路径" value={info.path} />
-          <Row style={{ marginTop: 12 }}>
+          <Row style={st.actions}>
             <Btn
+              size="sm"
+              fit
+              text="用其他应用打开"
+              icon="file"
+              onPress={doOpenWith}
+            />
+            <Btn
+              size="sm"
+              fit
+              kind="soft"
+              text="打开所在文件夹"
+              icon="folder"
+              onPress={doOpenFolder}
+            />
+            <Btn
+              size="sm"
+              fit
+              kind="ghost"
               text={copied ? '已复制路径' : '复制路径'}
               icon={copied ? 'check' : 'copy'}
-              kind="soft"
               onPress={() => {
                 copyText(info.path);
                 setCopied(true);
+                showToast('路径已复制到剪贴板');
                 setTimeout(() => setCopied(false), 1200);
               }}
             />
-            <Btn
-              text={info.where === 'downloads' ? '在下载目录查看' : '见应用缓存'}
-              icon={info.where === 'downloads' ? 'external' : 'info'}
-              kind="ghost"
-              onPress={() => copyText(info.path)}
-            />
           </Row>
+          {toast ? (
+            <View style={st.line}>
+              <Icon name={toast.ok ? 'check' : 'info'} size={16} color={toast.ok ? p.ok : p.warn} />
+              <Text style={[st.msg, { color: toast.ok ? p.ok : p.warn }]}>{toast.text}</Text>
+            </View>
+          ) : null}
           <Text style={st.note}>
             {info.where === 'downloads'
-              ? '可在「文件管理 → 下载」或系统「下载」通知中找到该文件。'
-              : '当前设备未开放系统下载目录，文件暂存在应用缓存中，可先用「复制路径」定位。'}
+              ? '可在「文件管理 → 下载」或系统「下载」通知中找到该文件；也可以直接用上面的按钮跳转。'
+              : '当前设备未开放系统下载目录，文件暂存在应用缓存中（其他应用读不到），可用「复制路径」定位。'}
           </Text>
         </Card>
       ) : null}
@@ -227,6 +292,7 @@ const st = dynStyles((C) =>
   StyleSheet.create({
     line: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 10 },
     msg: { fontSize: 13, lineHeight: 18, flex: 1 },
+    actions: { marginTop: 12, flexWrap: 'wrap' },
     note: { fontSize: 12, color: C.sub, lineHeight: 18, marginTop: 10 },
     tip: { fontSize: 12, color: C.sub, lineHeight: 18 },
     tip2: { fontSize: 12, color: C.sub, lineHeight: 18, marginTop: 8 },

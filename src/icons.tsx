@@ -81,6 +81,8 @@ export type IconName =
   | 'star'
   | 'external'
   | 'rotate'
+  | 'folder'
+  | 'file'
   | 'dot';
 
 const s = (color: string) => ({ stroke: color, fill: 'none' as const });
@@ -456,6 +458,24 @@ const GLYPHS: Record<IconName, (c: string) => React.ReactNode> = {
   ),
   chevron: (c) => <Path d="M14.6 5.6 8.2 12l6.4 6.4" {...s(c)} />,
   next: (c) => <Path d="M9.4 5.6 15.8 12l-6.4 6.4" {...s(c)} />,
+  folder: (c) => (
+    <>
+      <Path
+        d="M3.8 7.6a1.8 1.8 0 0 1 1.8-1.8h3.2l2 2.2h7.6a1.8 1.8 0 0 1 1.8 1.8v8.2a1.8 1.8 0 0 1-1.8 1.8H5.6a1.8 1.8 0 0 1-1.8-1.8Z"
+        {...s(c)}
+      />
+      <Path d="M3.9 10.4h16.2" {...s(c)} />
+    </>
+  ),
+  file: (c) => (
+    <>
+      <Path
+        d="M6.6 4.2h6.6l4.4 4.4v10.2a1.4 1.4 0 0 1-1.4 1.4H6.6a1.4 1.4 0 0 1-1.4-1.4V5.6a1.4 1.4 0 0 1 1.4-1.4Z"
+        {...s(c)}
+      />
+      <Path d="M13 4.4v4.6h4.4M8.6 14h6.8M8.6 17h4.4" {...s(c)} />
+    </>
+  ),
   close: (c) => <Path d="M6.4 6.4l11.2 11.2M17.6 6.4 6.4 17.6" {...s(c)} />,
   check: (c) => <Path d="m5.4 12.6 4.4 4.4 9-9.6" {...s(c)} />,
   plus: (c) => <Path d="M12 5.4v13.2M5.4 12h13.2" {...s(c)} />,

@@ -3,9 +3,12 @@ package com.toolboxapp
 import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.net.Uri
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -13,6 +16,7 @@ import android.hardware.SensorManager
 import android.media.MediaRecorder
 import android.os.Build
 import android.os.Environment
+import android.os.StrictMode
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -435,6 +439,221 @@ class ToolboxNativeModule(private val reactContext: ReactApplicationContext) :
     } catch (e: Exception) {
       promise.reject("SAVE_FAIL", e.message ?: "保存失败", e)
     }
+  }
+
+  // ---------- 外部应用打开 / 文件管理器跳转 ----------
+
+  private fun downloadDir(): File =
+      Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+
+  /** 按文件名在「下载」集合里查 Uri（Android 10+ 应用自建的文件可直接读，无需存储权限） */
+  private fun queryDownloadsUri(name: String): Uri? {
+    if (name.isEmpty() || Build.VERSION.SDK_INT < 29) return null
+    var cur: android.database.Cursor? = null
+    try {
+      cur = reactContext.contentResolver.query(
+          MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+          arrayOf(MediaStore.Downloads._ID),
+          "${MediaStore.Downloads.DISPLAY_NAME} = ?",
+          arrayOf(name),
+          null)
+      if (cur != null && cur.moveToFirst()) {
+        val id = cur.getLong(0)
+        return ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, id)
+      }
+    } catch (e: Exception) {
+      return null
+    } finally {
+      try {
+        cur?.close()
+      } catch (_: Exception) {
+      }
+    }
+    return null
+  }
+
+  /**
+   * 把传进来的路径解析成真实文件。
+   * 兼容绝对路径与 saveToDownloads 返回的「Download/xxx.mp3」相对路径。
+   */
+  private fun resolveFile(path: String): File? {
+    val raw = path.trim()
+    if (raw.isEmpty() || raw.startsWith("content://")) return null
+    val direct = File(raw)
+    if (direct.isAbsolute && direct.exists()) return direct
+    val name = raw.substringAfterLast('/')
+    if (name.isEmpty()) return null
+    val inDownload = File(downloadDir(), name)
+    if (inDownload.exists()) return inDownload
+    return null
+  }
+
+  /** 依次尝试的 Uri：先 MediaStore（避免 FileUriExposed），再 file:// */
+  private fun candidateUris(path: String): List<Uri> {
+    val raw = path.trim()
+    val out = mutableListOf<Uri>()
+    if (raw.isEmpty()) return out
+    if (raw.startsWith("content://")) {
+      out.add(Uri.parse(raw))
+      return out
+    }
+    val name = raw.substringAfterLast('/')
+    if (name.isNotEmpty()) queryDownloadsUri(name)?.let { out.add(it) }
+    resolveFile(raw)?.let { out.add(Uri.fromFile(it)) }
+    return out
+  }
+
+  private fun viewFlags(): Int =
+      Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK
+
+  /**
+   * 最后兜底：老系统（API 24-28）没有 MediaStore.Downloads，工程里也没有声明 FileProvider，
+   * 只能直连 file://。这里临时放宽 VmPolicy，避免 targetSdk≥24 时抛 FileUriExposedException 崩溃。
+   */
+  private fun startLegacy(uri: Uri, type: String, chooser: Boolean): Boolean {
+    val old = StrictMode.getVmPolicy()
+    return try {
+      StrictMode.setVmPolicy(StrictMode.VmPolicy.LAX)
+      val view = Intent(Intent.ACTION_VIEW)
+      view.setDataAndType(uri, type)
+      view.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+      val target = if (chooser) Intent.createChooser(view, "选择应用打开") else view
+      target.addFlags(viewFlags())
+      reactContext.startActivity(target)
+      true
+    } catch (e: Exception) {
+      false
+    } finally {
+      try {
+        StrictMode.setVmPolicy(old)
+      } catch (_: Exception) {
+      }
+    }
+  }
+
+  /** 用系统里已安装的应用打开单个文件 */
+  @ReactMethod
+  fun openFile(path: String, mime: String, promise: Promise) {
+    if (path.trim().isEmpty()) {
+      promise.reject("E_OPEN", "文件路径为空")
+      return
+    }
+    val type = if (mime.trim().isEmpty()) "*/*" else mime.trim()
+    val name = path.trim().substringAfterLast('/')
+    val uris = candidateUris(path)
+    if (uris.isEmpty()) {
+      promise.reject("E_OPEN", "找不到该文件，可能已被移动或删除")
+      return
+    }
+    var lastErr: Exception? = null
+    for (u in uris) {
+      try {
+        val intent = Intent(Intent.ACTION_VIEW)
+        intent.setDataAndType(u, type)
+        intent.addFlags(viewFlags())
+        reactContext.startActivity(intent)
+        promise.resolve("已用外部应用打开：$name")
+        return
+      } catch (e: Exception) {
+        // ActivityNotFound / FileUriExposedException / SecurityException 都走下一个候选
+        lastErr = e
+      }
+    }
+    val legacy = resolveFile(path)
+    if (legacy != null && startLegacy(Uri.fromFile(legacy), type, false)) {
+      promise.resolve("已用外部应用打开：$name")
+      return
+    }
+    promise.reject("E_OPEN", "没有可以打开该文件的应用", lastErr)
+  }
+
+  /** 跳到文件所在目录，逐个候选降级，全部失败才报错 */
+  @ReactMethod
+  fun openFolder(path: String, promise: Promise) {
+    var dir = downloadDir()
+    try {
+      val raw = path.trim()
+      if (raw.isNotEmpty()) {
+        val f = File(raw)
+        val base = if (f.isAbsolute) f else File(downloadDir(), f.name)
+        dir = if (base.isDirectory) base else (base.parentFile ?: downloadDir())
+      }
+    } catch (e: Exception) {
+      dir = downloadDir()
+    }
+
+    val rootUri = Uri.parse("content://com.android.externalstorage.documents/root/primary")
+    val candidates = mutableListOf<Intent>()
+
+    // a. 按「目录」协议交给文件管理器（MT 管理器 / ES / 部分 ROM 的系统文件）
+    candidates.add(Intent(Intent.ACTION_VIEW).apply {
+      setDataAndType(Uri.fromFile(dir), "resource/folder")
+    })
+    // b. 系统「下载」列表（最贴近用户想看的目录）
+    candidates.add(Intent("android.intent.action.VIEW_DOWNLOADS"))
+    // c. DocumentsUI 指名打开内部存储根
+    candidates.add(Intent(Intent.ACTION_VIEW).apply {
+      setDataAndType(rootUri, "resource/folder")
+      setPackage("com.android.documentsui")
+    })
+    candidates.add(Intent(Intent.ACTION_VIEW).apply {
+      setDataAndType(rootUri, "resource/folder")
+    })
+    // d. 文件管理器首页 / 任意选文件的入口
+    candidates.add(Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_APP_FILES) })
+    candidates.add(Intent(Intent.ACTION_GET_CONTENT).apply {
+      type = "*/*"
+      addCategory(Intent.CATEGORY_OPENABLE)
+    })
+
+    var lastErr: Exception? = null
+    for (intent in candidates) {
+      try {
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        reactContext.startActivity(intent)
+        promise.resolve("已打开文件管理器，请进入：${dir.absolutePath}")
+        return
+      } catch (e: Exception) {
+        lastErr = e
+      }
+    }
+    promise.reject("E_FOLDER", "此设备没有可用的文件管理器", lastErr)
+  }
+
+  /** 弹出系统「选择应用打开」选择器 */
+  @ReactMethod
+  fun listOpenWith(path: String, mime: String, promise: Promise) {
+    if (path.trim().isEmpty()) {
+      promise.reject("E_OPEN", "文件路径为空")
+      return
+    }
+    val type = if (mime.trim().isEmpty()) "*/*" else mime.trim()
+    val uris = candidateUris(path)
+    if (uris.isEmpty()) {
+      promise.reject("E_OPEN", "找不到该文件，可能已被移动或删除")
+      return
+    }
+    var lastErr: Exception? = null
+    for (u in uris) {
+      try {
+        val view = Intent(Intent.ACTION_VIEW)
+        view.setDataAndType(u, type)
+        view.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        val chooser = Intent.createChooser(view, "选择应用打开")
+        chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        reactContext.startActivity(chooser)
+        promise.resolve("请在系统面板中选择要使用的应用")
+        return
+      } catch (e: Exception) {
+        lastErr = e
+      }
+    }
+    val legacy = resolveFile(path)
+    if (legacy != null && startLegacy(Uri.fromFile(legacy), type, true)) {
+      promise.resolve("请在系统面板中选择要使用的应用")
+      return
+    }
+    promise.reject("E_OPEN", "没有可以打开该文件的应用", lastErr)
   }
 
   override fun invalidate() {

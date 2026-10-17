@@ -578,11 +578,6 @@ const st = dynStyles((C) =>
       overflow: 'hidden',
       borderWidth: 1,
       borderColor: 'rgba(255,255,255,0.32)',
-      shadowColor: C.primary,
-      shadowOpacity: 0.45,
-      shadowRadius: 16,
-      shadowOffset: { width: 0, height: 7 },
-      elevation: 6,
     },
     mainText: { color: '#ffffff', fontSize: 16.5, fontWeight: '800', letterSpacing: 1 },
 
@@ -623,11 +618,6 @@ const st = dynStyles((C) =>
       backgroundColor: C.isDark ? 'rgba(18,22,30,0.88)' : 'rgba(255,255,255,0.93)',
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: C.isDark ? 'rgba(255,255,255,0.16)' : 'rgba(17,24,39,0.10)',
-      shadowColor: '#000',
-      shadowOpacity: 0.4,
-      shadowRadius: 24,
-      shadowOffset: { width: 0, height: 12 },
-      elevation: 14,
     },
     handle: {
       alignSelf: 'center',

@@ -393,11 +393,6 @@ const st = dynStyles((C) =>
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: StyleSheet.hairlineWidth,
-      shadowColor: C.cardShadow,
-      shadowOpacity: 1,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 3,
     },
     circleLabel: { fontSize: 12, fontWeight: '600' },
     sheetWrap: {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, Result, C, dynStyles} from '../ui';
+import { Page, Card, DateField, Result, C, dynStyles} from '../ui';
 import { Text, StyleSheet } from 'react-native';
 
 export default function AgeCalc({ onBack }: { onBack: () => void }) {
@@ -43,7 +43,7 @@ export default function AgeCalc({ onBack }: { onBack: () => void }) {
   return (
     <Page id="age" title="年龄计算" onBack={onBack}>
       <Card>
-        <Field label="出生日期" value={birth} onChange={setBirth} placeholder="2000-01-01" />
+        <DateField label="出生日期" value={birth} onChange={setBirth} mode="date" />
       </Card>
       {rows.length > 0 && (
         <Card>

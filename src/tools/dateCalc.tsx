@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, Field, Btn, Row, Result, C, dynStyles} from '../ui';
+import { Page, Card, DateField, Field, Btn, Row, Result, C, dynStyles} from '../ui';
 import { Text, StyleSheet } from 'react-native';
 
 function today(): string {
@@ -48,13 +48,13 @@ export default function DateCalc({ onBack }: { onBack: () => void }) {
     <Page id="date" title="日期计算" onBack={onBack}>
       <Card>
         <Text style={st.sec}>① 两个日期相差多少天</Text>
-        <Field label="开始日期" value={d1} onChange={setD1} placeholder="2026-01-01" />
-        <Field label="结束日期" value={d2} onChange={setD2} placeholder="2026-12-31" />
+        <DateField label="开始日期" value={d1} onChange={setD1} mode="date" />
+        <DateField label="结束日期" value={d2} onChange={setD2} mode="date" />
         {diffDays && <Result label="相差天数" value={`${diffDays} 天`} />}
       </Card>
       <Card>
         <Text style={st.sec}>② 日期加减 N 天</Text>
-        <Field label="基准日期" value={base} onChange={setBase} placeholder="YYYY-MM-DD" />
+        <DateField label="基准日期" value={base} onChange={setBase} mode="date" />
         <Field label="天数（可为负）" value={days} onChange={setDays} keyboardType="numbers-and-punctuation" />
         {future && <Result label="计算结果" value={future} />}
       </Card>

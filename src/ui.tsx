@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
+  Modal,
   PanResponder,
   Platform,
   Pressable,
@@ -127,83 +128,67 @@ export function Glow(props: {
 }
 
 /* ------------------------------------------------------------------ */
-/* 玻璃质感层：ColorOS 式「上亮下暗」高光 + 可选渐变底                  */
+/* 玻璃质感层：ColorOS「凝光」材质                                      */
+/* 关键点：整块表面只用「一条连续渐变」+「一道 1px 顶边高光」，          */
+/* 不再用上下两个色块拼接——那样会在按钮正中间留下一条可见的分界线。     */
 /* ------------------------------------------------------------------ */
 let glassSeed = 0;
 
-export function GlassLayer(props: {
-  radius: number;
-  tone?: 'card' | 'button' | 'primary';
-  from?: string;
-  to?: string;
-}) {
+type GlassTone = 'card' | 'button' | 'primary' | 'soft' | 'danger';
+
+export function GlassLayer(props: { radius: number; tone?: GlassTone }) {
   const p = usePalette();
-  const id = useMemo(() => `gl${(glassSeed += 1)}`, []);
+  const id = useMemo(() => `g${(glassSeed += 1)}`, []);
   const tone = props.tone ?? 'card';
+  const dark = p.isDark;
 
+  let stops: [string, string, string];
   if (tone === 'primary') {
-    const from = props.from ?? p.primary2;
-    const to = props.to ?? p.primary;
-    return (
-      <View
-        pointerEvents="none"
-        style={[StyleSheet.absoluteFill, { borderRadius: props.radius, overflow: 'hidden' }]}>
-        <Svg width="100%" height="100%">
-          <Defs>
-            <LinearGradient id={id} x1="0" y1="0" x2="0.35" y2="1">
-              <Stop offset="0" stopColor={from} />
-              <Stop offset="1" stopColor={to} />
-            </LinearGradient>
-          </Defs>
-          <Rect x={0} y={0} width="100%" height="100%" fill={`url(#${id})`} />
-        </Svg>
-        {/* 顶部高光，做出立体玻璃感 */}
-        <View
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            top: 0,
-            height: '48%',
-            backgroundColor: 'rgba(255,255,255,0.18)',
-          }}
-        />
-      </View>
-    );
+    stops = [
+      'rgba(255,255,255,0.30)',
+      'rgba(255,255,255,0.07)',
+      dark ? 'rgba(0,0,0,0.20)' : 'rgba(0,0,0,0.07)',
+    ];
+  } else if (tone === 'soft') {
+    stops = dark
+      ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.012)', 'rgba(0,0,0,0.07)']
+      : ['rgba(255,255,255,0.58)', 'rgba(255,255,255,0.14)', 'rgba(148,163,184,0.05)'];
+  } else if (tone === 'danger') {
+    stops = ['rgba(255,255,255,0.22)', 'rgba(255,255,255,0.05)', 'rgba(0,0,0,0.07)'];
+  } else if (tone === 'button') {
+    stops = dark
+      ? ['rgba(255,255,255,0.105)', 'rgba(255,255,255,0.028)', 'rgba(0,0,0,0.15)']
+      : ['rgba(255,255,255,0.94)', 'rgba(255,255,255,0.34)', 'rgba(203,213,225,0.20)'];
+  } else {
+    stops = dark
+      ? ['rgba(255,255,255,0.062)', 'rgba(255,255,255,0.014)', 'rgba(0,0,0,0.10)']
+      : ['rgba(255,255,255,0.88)', 'rgba(255,255,255,0.28)', 'rgba(203,213,225,0.14)'];
   }
-
-  const top =
-    tone === 'button'
-      ? p.isDark
-        ? 0.075
-        : 0.5
-      : p.isDark
-      ? 0.055
-      : 0.36;
-  const bottom = p.isDark ? 0.015 : 0.08;
 
   return (
     <View
       pointerEvents="none"
       style={[StyleSheet.absoluteFill, { borderRadius: props.radius, overflow: 'hidden' }]}>
+      <Svg width="100%" height="100%">
+        <Defs>
+          <LinearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={stops[0]} />
+            <Stop offset="0.52" stopColor={stops[1]} />
+            <Stop offset="1" stopColor={stops[2]} />
+          </LinearGradient>
+        </Defs>
+        <Rect x={0} y={0} width="100%" height="100%" fill={`url(#${id})`} />
+      </Svg>
+      {/* 凝光的“聚光边”：只有一道发丝级高光，不产生色块 */}
       <View
         style={{
           position: 'absolute',
-          left: 0,
-          right: 0,
+          left: '6%',
+          right: '6%',
           top: 0,
-          height: '46%',
-          backgroundColor: `rgba(255,255,255,${top})`,
-        }}
-      />
-      <View
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: '30%',
-          backgroundColor: p.isDark ? `rgba(0,0,0,0.14)` : `rgba(255,255,255,${bottom})`,
+          height: StyleSheet.hairlineWidth * 2,
+          borderRadius: 1,
+          backgroundColor: dark ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.95)',
         }}
       />
     </View>
@@ -350,7 +335,7 @@ export function Card(props: {
   pad?: number;
 }) {
   const p = usePalette();
-  const radius = 24;
+  const radius = 22;
   const style = [
     {
       backgroundColor: p.card,
@@ -360,11 +345,8 @@ export function Card(props: {
       overflow: 'hidden',
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: p.cardBorder,
-      shadowColor: p.cardShadow,
-      shadowOpacity: 1,
-      shadowRadius: 14,
-      shadowOffset: { width: 0, height: 6 },
-      elevation: 2,
+      // 不再使用 elevation / shadow：Android 上带透明背景的 elevation
+      // 会渲染成一块方形阴影，就是用户看到的“按钮下面的正方形色块”。
     },
     props.style,
   ];
@@ -430,12 +412,15 @@ export function Btn(props: {
 }) {
   const p = usePalette();
   const kind = props.kind ?? 'primary';
-  const palette: Record<string, { bg: string; fg: string; border: string }> = {
-    primary: { bg: p.primary, fg: p.onPrimary, border: 'transparent' },
-    plain: { bg: p.card, fg: p.primary, border: p.primary + '55' },
-    soft: { bg: p.primarySoft, fg: p.primary, border: 'transparent' },
-    ghost: { bg: 'transparent', fg: p.text, border: p.line },
-    danger: { bg: p.warn + '1f', fg: p.warn, border: 'transparent' },
+  const palette: Record<
+    string,
+    { bg: string; fg: string; border: string; tone: GlassTone | null }
+  > = {
+    primary: { bg: p.primary, fg: p.onPrimary, border: 'transparent', tone: 'primary' },
+    plain: { bg: p.card, fg: p.primary, border: p.primary + '33', tone: 'button' },
+    soft: { bg: p.primarySoft, fg: p.primary, border: 'transparent', tone: 'soft' },
+    ghost: { bg: 'transparent', fg: p.text, border: p.line, tone: null },
+    danger: { bg: p.warn + '18', fg: p.warn, border: 'transparent', tone: 'danger' },
   };
   const k = palette[kind];
   const sm = props.size === 'sm';
@@ -454,18 +439,19 @@ export function Btn(props: {
           justifyContent: 'center',
           gap: 6,
           borderRadius: radius,
-          paddingVertical: sm ? 8 : 13,
-          paddingHorizontal: sm ? 13 : 17,
+          minHeight: sm ? 34 : 46,
+          paddingVertical: sm ? 7 : 12,
+          paddingHorizontal: sm ? 13 : 16,
           overflow: 'hidden',
-          backgroundColor: kind === 'primary' ? 'transparent' : k.bg,
-          borderWidth: StyleSheet.hairlineWidth,
+          backgroundColor: k.bg,
+          borderWidth: kind === 'ghost' ? StyleSheet.hairlineWidth : 0,
           borderColor: k.border,
         },
         props.style,
       ]}>
-      <GlassLayer radius={radius} tone={kind === 'primary' ? 'primary' : 'button'} />
+      {k.tone ? <GlassLayer radius={radius} tone={k.tone} /> : null}
       {props.icon ? <Icon name={props.icon} size={sm ? 15 : 17} color={k.fg} /> : null}
-      <Text style={{ color: k.fg, fontSize: sm ? 13.5 : 15, fontWeight: '600' }} numberOfLines={1}>
+      <Text style={{ color: k.fg, fontSize: sm ? 13 : 14.5, fontWeight: '600' }} numberOfLines={1}>
         {props.text}
       </Text>
     </Tap>
@@ -494,7 +480,7 @@ export function Chip(props: {
           overflow: 'hidden',
           backgroundColor: props.active ? p.primary : p.chip,
           borderWidth: StyleSheet.hairlineWidth,
-          borderColor: props.active ? p.primary : p.chipBorder,
+          borderColor: props.active ? 'transparent' : p.chipBorder,
         },
         props.style,
       ]}>
@@ -582,27 +568,390 @@ export function Field(props: {
           {props.label}
         </Text>
       ) : null}
-      <TextInput
+      <View
         style={{
-          backgroundColor: p.input,
           borderRadius: 14,
+          overflow: 'hidden',
+          backgroundColor: p.input,
           borderWidth: StyleSheet.hairlineWidth,
           borderColor: focus ? p.primary : p.line,
-          paddingHorizontal: 13,
-          paddingVertical: Platform.OS === 'android' ? 9 : 11,
-          fontSize: 15,
+        }}>
+        <GlassLayer radius={14} tone="soft" />
+        <TextInput
+          style={{
+            paddingHorizontal: 13,
+            paddingVertical: Platform.OS === 'android' ? 11 : 12,
+            fontSize: 15,
+            color: p.text,
+            minHeight: props.multiline ? 96 : undefined,
+            textAlignVertical: props.multiline ? 'top' : 'center',
+          }}
+          value={props.value}
+          onChangeText={props.onChange}
+          onFocus={() => setFocus(true)}
+          onBlur={() => setFocus(false)}
+          placeholder={props.placeholder}
+          placeholderTextColor={p.faint}
+          multiline={props.multiline}
+          keyboardType={props.keyboardType}
+        />
+      </View>
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* 日期 / 时间选择器                                                    */
+/* 目的：任何需要日期的地方都不再让用户一个字符一个字符地敲键盘。        */
+/* ------------------------------------------------------------------ */
+const WD_CN = ['日', '一', '二', '三', '四', '五', '六'];
+
+const p2 = (n: number) => (n < 10 ? '0' + n : String(n));
+
+export function todayStr(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+}
+
+export function nowHM(): string {
+  const d = new Date();
+  return `${p2(d.getHours())}:${p2(d.getMinutes())}`;
+}
+
+export function parseDateStr(v: string): Date | null {
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(v.trim());
+  if (!m) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+type PickMode = 'date' | 'time' | 'datetime';
+
+export function DatePickerSheet(props: {
+  visible: boolean;
+  value: string;
+  mode?: PickMode;
+  title?: string;
+  onClose: () => void;
+  onPick: (v: string) => void;
+}) {
+  const p = usePalette();
+  const mode = props.mode ?? 'date';
+  const withDate = mode !== 'time';
+  const withTime = mode !== 'date';
+
+  const base = useMemo(() => {
+    const dv = parseDateStr(props.value);
+    const tm = /(\d{1,2}):(\d{2})/.exec(props.value);
+    const d = dv ?? new Date();
+    if (tm) d.setHours(Number(tm[1]), Number(tm[2]), 0, 0);
+    return d;
+    // 每次打开时按当前值重算即可
+  }, [props.value, props.visible]);
+
+  const [year, setYear] = useState(base.getFullYear());
+  const [month, setMonth] = useState(base.getMonth());
+  const [day, setDay] = useState(base.getDate());
+  const [hour, setHour] = useState(base.getHours());
+  const [minute, setMinute] = useState(base.getMinutes());
+
+  useEffect(() => {
+    if (!props.visible) return;
+    setYear(base.getFullYear());
+    setMonth(base.getMonth());
+    setDay(base.getDate());
+    setHour(base.getHours());
+    setMinute(base.getMinutes());
+  }, [props.visible]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const first = new Date(year, month, 1);
+  const startWd = first.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = todayStr();
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < startWd; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const shift = (delta: number) => {
+    const d = new Date(year, month + delta, 1);
+    setYear(d.getFullYear());
+    setMonth(d.getMonth());
+  };
+
+  const commit = () => {
+    const dateStr = `${year}-${p2(month + 1)}-${p2(day)}`;
+    const timeStr = `${p2(hour)}:${p2(minute)}`;
+    props.onPick(mode === 'time' ? timeStr : mode === 'date' ? dateStr : `${dateStr} ${timeStr}`);
+    props.onClose();
+  };
+
+  const cellW = `${100 / 7}%` as const;
+
+  return (
+    <Modal visible={props.visible} transparent animationType="fade" onRequestClose={props.onClose}>
+      <Pressable
+        onPress={props.onClose}
+        style={{ flex: 1, backgroundColor: p.overlay, justifyContent: 'flex-end' }}>
+        <Pressable
+          onPress={() => {}}
+          style={{
+            backgroundColor: p.cardSolid,
+            borderTopLeftRadius: 26,
+            borderTopRightRadius: 26,
+            paddingHorizontal: 16,
+            paddingTop: 10,
+            paddingBottom: 20,
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderColor: p.cardBorder,
+            overflow: 'hidden',
+          }}>
+          <GlassLayer radius={26} tone="card" />
+          {/* 抓手 */}
+          <View
+            style={{
+              alignSelf: 'center',
+              width: 36,
+              height: 4,
+              borderRadius: 2,
+              backgroundColor: p.line,
+              marginBottom: 12,
+            }}
+          />
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+            <Text style={{ flex: 1, fontSize: 16, fontWeight: '700', color: p.text }}>
+              {props.title ?? (mode === 'time' ? '选择时间' : '选择日期')}
+            </Text>
+            <Tap onPress={props.onClose} hitSlop={10}>
+              <Icon name="close" size={20} color={p.sub} />
+            </Tap>
+          </View>
+
+          {withDate ? (
+            <>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                <Tap onPress={() => shift(-1)} hitSlop={8} style={s.nav}>
+                  <Icon name="chevron" size={18} color={p.text} />
+                </Tap>
+                <Text
+                  style={{
+                    flex: 1,
+                    textAlign: 'center',
+                    fontSize: 15.5,
+                    fontWeight: '700',
+                    color: p.text,
+                  }}>
+                  {year} 年 {month + 1} 月
+                </Text>
+                <Tap
+                  onPress={() => shift(1)}
+                  hitSlop={8}
+                  style={[s.nav, { transform: [{ rotate: '180deg' }] }]}>
+                  <Icon name="chevron" size={18} color={p.text} />
+                </Tap>
+              </View>
+              <View style={{ flexDirection: 'row', marginBottom: 2 }}>
+                {WD_CN.map((w) => (
+                  <Text
+                    key={w}
+                    style={{
+                      width: cellW,
+                      textAlign: 'center',
+                      fontSize: 11.5,
+                      color: p.faint,
+                      paddingVertical: 4,
+                    }}>
+                    {w}
+                  </Text>
+                ))}
+              </View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                {cells.map((d, i) => {
+                  if (d === null) return <View key={`e${i}`} style={{ width: cellW, height: 40 }} />;
+                  const on = d === day;
+                  const isToday = `${year}-${p2(month + 1)}-${p2(d)}` === today;
+                  return (
+                    <View key={`d${i}`} style={{ width: cellW, height: 40, padding: 2 }}>
+                      <Tap
+                        onPress={() => setDay(d)}
+                        style={{
+                          flex: 1,
+                          borderRadius: 11,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          overflow: 'hidden',
+                          backgroundColor: on ? p.primary : 'transparent',
+                          borderWidth: isToday && !on ? StyleSheet.hairlineWidth : 0,
+                          borderColor: p.primary + '66',
+                        }}>
+                        {on ? <GlassLayer radius={11} tone="primary" /> : null}
+                        <Text
+                          style={{
+                            fontSize: 14.5,
+                            fontWeight: on || isToday ? '700' : '500',
+                            color: on ? p.onPrimary : isToday ? p.primary : p.text,
+                          }}>
+                          {d}
+                        </Text>
+                      </Tap>
+                    </View>
+                  );
+                })}
+              </View>
+            </>
+          ) : null}
+
+          {withTime ? (
+            <View style={{ marginTop: 8 }}>
+              <Text style={{ fontSize: 12.5, color: p.sub, fontWeight: '600', marginBottom: 6 }}>
+                时间
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <StepBox
+                  value={p2(hour)}
+                  onDec={() => setHour((h) => (h + 23) % 24)}
+                  onInc={() => setHour((h) => (h + 1) % 24)}
+                />
+                <Text style={{ fontSize: 18, fontWeight: '700', color: p.sub }}>:</Text>
+                <StepBox
+                  value={p2(minute)}
+                  onDec={() => setMinute((m) => (m + 55) % 60)}
+                  onInc={() => setMinute((m) => (m + 5) % 60)}
+                />
+                <View style={{ flex: 1 }}>
+                  <Chip text="现在" icon="clock" onPress={() => {
+                    const n = new Date();
+                    setHour(n.getHours());
+                    setMinute(n.getMinutes());
+                  }} />
+                </View>
+              </View>
+            </View>
+          ) : null}
+
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+            <Btn
+              text="今天"
+              kind="plain"
+              fit
+              onPress={() => {
+                const n = new Date();
+                setYear(n.getFullYear());
+                setMonth(n.getMonth());
+                setDay(n.getDate());
+                if (withTime) {
+                  setHour(n.getHours());
+                  setMinute(n.getMinutes());
+                }
+              }}
+            />
+            <Btn text="确定" onPress={commit} style={{ flex: 1 }} />
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function StepBox(props: { value: string; onInc: () => void; onDec: () => void }) {
+  const p = usePalette();
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 14,
+        overflow: 'hidden',
+        backgroundColor: p.input,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: p.line,
+      }}>
+      <Tap onPress={props.onDec} hitSlop={6} style={{ paddingHorizontal: 10, paddingVertical: 10 }}>
+        <Icon name="minus" size={16} color={p.text} />
+      </Tap>
+      <Text
+        style={{
+          minWidth: 34,
+          textAlign: 'center',
+          fontSize: 17,
+          fontWeight: '700',
           color: p.text,
-          minHeight: props.multiline ? 96 : undefined,
-          textAlignVertical: props.multiline ? 'top' : 'center',
-        }}
+          fontVariant: ['tabular-nums'],
+        }}>
+        {props.value}
+      </Text>
+      <Tap onPress={props.onInc} hitSlop={6} style={{ paddingHorizontal: 10, paddingVertical: 10 }}>
+        <Icon name="plus" size={16} color={p.text} />
+      </Tap>
+    </View>
+  );
+}
+
+/** 点一下就弹出日历/时间面板的输入行（替代手打日期文本） */
+export function DateField(props: {
+  label?: string;
+  value: string;
+  onChange: (v: string) => void;
+  mode?: PickMode;
+  placeholder?: string;
+  style?: any;
+}) {
+  const p = usePalette();
+  const [open, setOpen] = useState(false);
+  const mode = props.mode ?? 'date';
+  return (
+    <View style={[{ marginBottom: 12 }, props.style]}>
+      {props.label ? (
+        <Text style={{ fontSize: 12.5, color: p.sub, marginBottom: 6, fontWeight: '600' }}>
+          {props.label}
+        </Text>
+      ) : null}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          borderRadius: 14,
+          overflow: 'hidden',
+          backgroundColor: p.input,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: p.line,
+        }}>
+        <GlassLayer radius={14} tone="soft" />
+        <Tap
+          onPress={() => setOpen(true)}
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            paddingHorizontal: 13,
+            paddingVertical: 12,
+          }}>
+          <Icon name={mode === 'time' ? 'clock' : 'calendar'} size={16} color={p.primary} />
+          <Text
+            style={{
+              flex: 1,
+              fontSize: 15,
+              color: props.value ? p.text : p.faint,
+              fontVariant: ['tabular-nums'],
+            }}>
+            {props.value || props.placeholder || (mode === 'time' ? '选择时间' : '选择日期')}
+          </Text>
+          <Icon name="chevron" size={16} color={p.faint} />
+        </Tap>
+        <Tap
+          onPress={() => setOpen(true)}
+          hitSlop={6}
+          style={{ paddingHorizontal: 12, paddingVertical: 12 }}>
+          <Text style={{ fontSize: 12.5, fontWeight: '700', color: p.primary }}>选择</Text>
+        </Tap>
+      </View>
+      <DatePickerSheet
+        visible={open}
         value={props.value}
-        onChangeText={props.onChange}
-        onFocus={() => setFocus(true)}
-        onBlur={() => setFocus(false)}
-        placeholder={props.placeholder}
-        placeholderTextColor={p.faint}
-        multiline={props.multiline}
-        keyboardType={props.keyboardType}
+        mode={mode}
+        onClose={() => setOpen(false)}
+        onPick={props.onChange}
       />
     </View>
   );
@@ -667,11 +1016,6 @@ export function Toggle(props: { value: boolean; onChange: (v: boolean) => void; 
           transform: [
             { translateX: v.interpolate({ inputRange: [0, 1], outputRange: [0, W - K - 6] }) },
           ],
-          shadowColor: '#000',
-          shadowOpacity: 0.22,
-          shadowRadius: 4,
-          shadowOffset: { width: 0, height: 2 },
-          elevation: 3,
         }}
       />
     </Tap>
@@ -752,10 +1096,6 @@ export function Slider(props: {
             backgroundColor: '#fff',
             borderWidth: 2,
             borderColor: p.primary,
-            shadowColor: p.primary,
-            shadowOpacity: 0.35,
-            shadowRadius: 5,
-            elevation: 3,
           }}
         />
       </View>
@@ -874,11 +1214,6 @@ export function IconTile(props: {
         alignItems: 'center',
         justifyContent: 'center',
         overflow: 'hidden',
-        shadowColor: props.from,
-        shadowOpacity: 0.35,
-        shadowRadius: 8,
-        shadowOffset: { width: 0, height: 3 },
-        elevation: 3,
       }}>
       <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
         <Defs>
@@ -990,8 +1325,18 @@ export function BigNumber(props: { text: string; sub?: string; style?: any }) {
   );
 }
 
-const s = dynStyles(() =>
+const s = dynStyles((C) =>
   StyleSheet.create({
     back: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
+    nav: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: C.chip,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: C.chipBorder,
+    },
   }),
 );

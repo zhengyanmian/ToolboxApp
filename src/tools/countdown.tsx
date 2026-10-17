@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Page, Card, Field, Btn, Row, C, dynStyles} from '../ui';
+import { Page, Card, DateField, Field, Btn, Row, C, dynStyles} from '../ui';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -18,9 +18,7 @@ export default function Countdown({ onBack }: { onBack: () => void }) {
   const [items, setItems] = useState<Item[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [name, setName] = useState('');
-  const [yy, setYy] = useState('2027');
-  const [mm, setMm] = useState('1');
-  const [dd, setDd] = useState('1');
+  const [date, setDate] = useState('2027-01-01');
 
   // 读取持久化数据
   useEffect(() => {
@@ -37,13 +35,27 @@ export default function Countdown({ onBack }: { onBack: () => void }) {
     AsyncStorage.setItem(KEY, JSON.stringify(next)).catch(() => {});
   }
 
+  function parsePick(): { y: number; m: number; d: number } | null {
+    const m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(date.trim());
+    if (!m) return null;
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const d = Number(m[3]);
+    if (!y || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+    return { y, m: mo, d };
+  }
+
   function add() {
-    const y = parseInt(yy, 10), m = parseInt(mm, 10), d = parseInt(dd, 10);
-    if (!name.trim() || !y || !m || !d || m < 1 || m > 12 || d < 1 || d > 31) {
-      Alert.alert('提示', '请填写事件名称和正确的日期');
+    if (!name.trim()) {
+      Alert.alert('提示', '请先填写事件名称');
       return;
     }
-    save([...items, { id: Date.now(), name: name.trim(), y, m, d }]);
+    const t = parsePick();
+    if (!t) {
+      Alert.alert('提示', '请选择目标日期');
+      return;
+    }
+    save([...items, { id: Date.now(), name: name.trim(), y: t.y, m: t.m, d: t.d }]);
     setName('');
   }
 
@@ -58,13 +70,7 @@ export default function Countdown({ onBack }: { onBack: () => void }) {
   }
 
   function fillFromInput() {
-    const y = parseInt(yy, 10), m = parseInt(mm, 10), d = parseInt(dd, 10);
-    if (!name.trim() || !y || !m || !d || m < 1 || m > 12 || d < 1 || d > 31) {
-      Alert.alert('提示', '请填写事件名称和正确的日期');
-      return;
-    }
-    save([...items, { id: Date.now(), name: name.trim(), y, m, d }]);
-    setName('');
+    add();
   }
 
   const upcoming = items
@@ -78,21 +84,7 @@ export default function Countdown({ onBack }: { onBack: () => void }) {
     <Page id="countdown" title="纪念日 / 倒计时" onBack={onBack}>
       <Card>
         <Field label="事件名称" value={name} onChange={setName} placeholder="例如：考研、生日、发工资" />
-        <Text style={st.label}>目标日期</Text>
-        <View style={st.dateRow}>
-          <View style={st.dateCol}>
-            <Text style={st.dateLabel}>年</Text>
-            <Field value={yy} onChange={setYy} keyboardType="numbers-and-punctuation" />
-          </View>
-          <View style={st.dateCol}>
-            <Text style={st.dateLabel}>月</Text>
-            <Field value={mm} onChange={setMm} keyboardType="numbers-and-punctuation" />
-          </View>
-          <View style={st.dateCol}>
-            <Text style={st.dateLabel}>日</Text>
-            <Field value={dd} onChange={setDd} keyboardType="numbers-and-punctuation" />
-          </View>
-        </View>
+        <DateField label="目标日期" value={date} onChange={setDate} mode="date" />
         <View style={st.quick}>
           <TouchableOpacity style={st.qBtn} onPress={() => quick(1)}><Text style={st.qText}>明天</Text></TouchableOpacity>
           <TouchableOpacity style={st.qBtn} onPress={() => quick(7)}><Text style={st.qText}>一周后</Text></TouchableOpacity>

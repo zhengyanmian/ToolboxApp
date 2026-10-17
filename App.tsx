@@ -17,6 +17,7 @@ import {
   Card,
   Chip,
   Empty,
+  GlassLayer,
   Icon,
   IconTile,
   RoundButton,
@@ -266,12 +267,9 @@ function ToolTile(props: { tool: ToolDef; index: number; onPress: () => void }) 
             paddingVertical: 13,
             paddingHorizontal: 6,
             alignItems: 'center',
-            shadowColor: p.cardShadow,
-            shadowOpacity: 1,
-            shadowRadius: 10,
-            shadowOffset: { width: 0, height: 3 },
-            elevation: 2,
+            overflow: 'hidden',
           }}>
+          <GlassLayer radius={18} tone="button" />
           <IconTile name={props.tool.icon as any} from={from} to={to} size={40} />
           <Text
             numberOfLines={1}

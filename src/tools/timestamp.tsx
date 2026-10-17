@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
-import { Card, Chip, Icon, Page, Tap, dynStyles } from '../ui';
+import { Card, Chip, DateField, Icon, Page, Tap, dynStyles } from '../ui';
 import { usePalette } from '../theme';
 import { copyText } from '../native';
 
@@ -208,24 +208,24 @@ export default function Timestamp({ onBack }: { onBack: () => void }) {
           </Tap>
         </View>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TextInput
-            style={[inputStyle(p), { flex: 1.5 }]}
-            value={dtDate}
-            onChangeText={(v) => setDtDate(autoDate(v))}
-            placeholder="2026-10-16"
-            placeholderTextColor={p.faint}
-            keyboardType="numbers-and-punctuation"
-            maxLength={10}
-          />
-          <TextInput
-            style={[inputStyle(p), { flex: 1 }]}
-            value={dtTime}
-            onChangeText={(v) => setDtTime(autoTime(v))}
-            placeholder="18:30"
-            placeholderTextColor={p.faint}
-            keyboardType="numbers-and-punctuation"
-            maxLength={8}
-          />
+          <View style={{ flex: 1.5 }}>
+            <DateField
+              value={dtDate}
+              onChange={setDtDate}
+              mode="date"
+              placeholder="选择日期"
+              style={{ marginBottom: 0 }}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <DateField
+              value={dtTime}
+              onChange={setDtTime}
+              mode="time"
+              placeholder="选择时间"
+              style={{ marginBottom: 0 }}
+            />
+          </View>
         </View>
         {msFromDt !== null ? (
           <View style={{ marginTop: 10 }}>
