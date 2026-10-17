@@ -6,6 +6,7 @@ type ToolboxNative = {
   setImmersive(on: boolean): void;
   startMagnetometer(intervalMs: number): void;
   startAccelerometer(intervalMs: number): void;
+  startGravity(intervalMs: number): void;
   startCompass(intervalMs: number): void;
   stopSensors(): void;
   vibrate(pattern: string): void;
@@ -17,9 +18,19 @@ type ToolboxNative = {
   getDeviceInfo(): Promise<Record<string, unknown>>;
   copyText(text: string): void;
   saveToDownloads(srcPath: string, displayName: string, mime: string): Promise<string>;
+  getDisplayMetrics(): Promise<ScreenMetrics>;
   openFile(path: string, mime: string): Promise<string>;
   openFolder(path: string): Promise<string>;
   listOpenWith(path: string, mime: string): Promise<string>;
+};
+
+export type ScreenMetrics = {
+  widthPx: number;
+  heightPx: number;
+  xdpi: number;
+  ydpi: number;
+  densityDpi: number;
+  density: number;
 };
 
 const native: ToolboxNative | undefined = NativeModules.ToolboxNative as any;
@@ -93,6 +104,12 @@ export const startMagnetometer = sensorFn(
 export const startAccelerometer = sensorFn(
   'AccelerometerUpdate',
   (n) => native!.startAccelerometer(n),
+  () => native!.stopSensors(),
+);
+
+export const startGravity = sensorFn(
+  'GravityUpdate',
+  (n) => native!.startGravity(n),
   () => native!.stopSensors(),
 );
 
@@ -198,5 +215,16 @@ export async function openWith(path: string, mime: string): Promise<string> {
     return await native.listOpenWith(path, mime);
   } catch (e: any) {
     throw new Error(e?.message || '没有可以打开该文件的应用');
+  }
+}
+
+
+/** 真实屏幕参数（尺子用它算 1mm 等于多少 dp） */
+export async function getScreenMetrics(): Promise<ScreenMetrics | null> {
+  if (!native?.getDisplayMetrics) return null;
+  try {
+    return (await native.getDisplayMetrics()) as ScreenMetrics;
+  } catch {
+    return null;
   }
 }

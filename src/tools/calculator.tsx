@@ -1,12 +1,28 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import {
+  LayoutAnimation,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  UIManager,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
-import { Page, GlassLayer, Icon, Tap, dynStyles } from '../ui';
+import { Page, Icon, Tap, dynStyles } from '../ui';
 import { usePalette } from '../theme';
 import { nativeVibrate } from '../native';
 import { create, all } from 'mathjs';
 
 const math = create(all);
+
+// 老架构需要显式开启布局动画；新架构下是空操作，不会报错
+try {
+  if (Platform.OS === 'android' && (UIManager as any).setLayoutAnimationEnabledExperimental) {
+    (UIManager as any).setLayoutAnimationEnabledExperimental(true);
+  }
+} catch {}
 
 type Kind = 'num' | 'fn' | 'op' | 'eq';
 type KeyDef = { label: string; kind: Kind; act?: string };
@@ -101,8 +117,6 @@ const SCI: KeyDef[][] = [
   ],
 ];
 
-let keySeed = 0;
-
 /** 单个圆键：纯视觉层，不接触摸（触摸统一交给键盘容器判定） */
 function KeyFace(props: {
   k: KeyDef;
@@ -111,7 +125,7 @@ function KeyFace(props: {
   pt: { x: number; y: number } | null;
 }) {
   const p = usePalette();
-  const gid = useMemo(() => `kg${(keySeed += 1)}`, []);
+  const gid = useMemo(() => `key${Math.random().toString(36).slice(2, 8)}`, []);
   const k = props.k;
   const isEq = k.kind === 'eq';
   const bg = isEq
@@ -143,28 +157,29 @@ function KeyFace(props: {
           height: props.size,
           borderRadius: props.size / 2,
           backgroundColor: bg,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: p.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.05)',
           transform: [{ scale: props.active ? 0.93 : 1 }],
         },
       ]}>
-      <GlassLayer radius={props.size / 2} tone={isEq ? 'primary' : 'button'} />
       {props.active && props.pt ? (
-        <View
-          style={[StyleSheet.absoluteFill, { borderRadius: props.size / 2, overflow: 'hidden' }]}>
+        <View style={[StyleSheet.absoluteFill, { borderRadius: props.size / 2, overflow: 'hidden' }]}>
           <Svg width={props.size} height={props.size}>
             <Defs>
               <RadialGradient
                 id={gid}
                 cx={props.pt.x}
                 cy={props.pt.y}
-                rx={props.size * 0.8}
-                ry={props.size * 0.8}
+                rx={props.size * 0.72}
+                ry={props.size * 0.72}
                 gradientUnits="userSpaceOnUse">
-                <Stop offset="0" stopColor="#ffffff" stopOpacity={0.42} />
-                <Stop offset="0.6" stopColor="#ffffff" stopOpacity={0.14} />
+                <Stop offset="0" stopColor="#ffffff" stopOpacity={0.34} />
+                <Stop offset="0.45" stopColor="#ffffff" stopOpacity={0.16} />
+                <Stop offset="0.78" stopColor="#ffffff" stopOpacity={0.05} />
                 <Stop offset="1" stopColor="#ffffff" stopOpacity={0} />
               </RadialGradient>
             </Defs>
-            <Circle cx={props.pt.x} cy={props.pt.y} r={props.size * 0.8} fill={`url(#${gid})`} />
+            <Circle cx={props.pt.x} cy={props.pt.y} r={props.size * 0.72} fill={`url(#${gid})`} />
           </Svg>
         </View>
       ) : null}
@@ -253,6 +268,7 @@ export default function Calculator({ onBack }: { onBack: () => void }) {
   const rowsAll = sci ? [...SCI, ...BASIC] : BASIC;
   const rowCount = rowsAll.length;
   const byWidth = (width - pad * 2 - gap * 3) / 4;
+  // 行内用 space-between 分配空隙，左右留白一定对称
   const byHeight = (height - 236 - gap * (rowCount - 1)) / rowCount;
   const keySize = Math.max(42, Math.min(78, byWidth, byHeight));
 
@@ -279,7 +295,10 @@ export default function Calculator({ onBack }: { onBack: () => void }) {
       <View style={{ flex: 1 }}>
         <View style={[st.toolbar, { paddingHorizontal: pad }]}>
           <Tap
-            onPress={() => setSci((v) => !v)}
+            onPress={() => {
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              setSci((v) => !v);
+            }}
             glow
             style={[
               st.tool,
@@ -373,25 +392,31 @@ export default function Calculator({ onBack }: { onBack: () => void }) {
           onTouchStart={(e) => {
             const h = hitTest(e.nativeEvent.locationX, e.nativeEvent.locationY);
             setHover(h);
-            if (h) nativeVibrate('0,10');
+            if (h) nativeVibrate('0,12');
           }}
           onTouchMove={(e) => {
             const h = hitTest(e.nativeEvent.locationX, e.nativeEvent.locationY);
             if (!h) return; // 划过间隙保持上一个键，手感更稳
             const prev = hoverRef.current;
             setHover(h);
-            if (!prev || prev.row !== h.row || prev.col !== h.col) nativeVibrate('0,8');
           }}
           onTouchEnd={() => {
             const h = hoverRef.current;
             setHover(null);
-            if (h) press(rowsAll[h.row][h.col]);
+            if (h) {
+              nativeVibrate('0,30');
+              press(rowsAll[h.row][h.col]);
+            }
           }}
           onTouchCancel={() => setHover(null)}>
           {rowsAll.map((row, ri) => (
             <View
               key={ri}
-              style={{ flexDirection: 'row', gap, marginBottom: ri === rowCount - 1 ? 0 : gap }}>
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                marginBottom: ri === rowCount - 1 ? 0 : gap,
+              }}>
               {row.map((k, ci) => (
                 <KeyFace
                   key={`${ri}-${ci}`}

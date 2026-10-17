@@ -195,6 +195,7 @@ export function ThemeProvider(props: { children: React.ReactNode }) {
   /* 主题切换过渡：从触发点扩开一个「新底色」的圆，盖满整屏的同一帧完成换色，
      用户看到的是从一个角向外铺开，而不是整屏闪一下。 */
   const grow = useRef(new Animated.Value(0)).current;
+  const fade = useRef(new Animated.Value(1)).current;
   const busy = useRef(false);
   const [reveal, setReveal] = useState<{ bg: string; x: number; y: number; d: number } | null>(
     null,
@@ -223,10 +224,11 @@ export function ThemeProvider(props: { children: React.ReactNode }) {
       const d = far * 2 + 28;
       setReveal({ bg: (nextDark ? darkPalette : lightPalette).bg, x, y, d });
       grow.setValue(0);
+      fade.setValue(1);
       requestAnimationFrame(() => {
         Animated.timing(grow, {
           toValue: 1,
-          duration: 430,
+          duration: 320,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }).start(({ finished }) => {
@@ -234,9 +236,17 @@ export function ThemeProvider(props: { children: React.ReactNode }) {
             busy.current = false;
             return;
           }
-          persist(m); // 光圈已经盖满，换色发生在看不见的地方
-          setReveal(null); // 同一帧撤掉光圈
-          busy.current = false;
+          persist(m); // 铺满了，换色发生在看不见的地方
+          // 再快速淡出：新主题的内容是「从背景里浮出来」，而不是被掀开一块板
+          Animated.timing(fade, {
+            toValue: 0,
+            duration: 170,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }).start(() => {
+            setReveal(null);
+            busy.current = false;
+          });
         });
       });
     },
@@ -269,8 +279,9 @@ export function ThemeProvider(props: { children: React.ReactNode }) {
               height: BASE,
               borderRadius: BASE / 2,
               backgroundColor: reveal.bg,
+              opacity: fade,
               transform: [
-                { scale: grow.interpolate({ inputRange: [0, 1], outputRange: [0, reveal.d / BASE] }) },
+                { scale: grow.interpolate({ inputRange: [0, 1], outputRange: [0.02, reveal.d / BASE] }) },
               ],
             }}
           />

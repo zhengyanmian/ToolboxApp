@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Svg, { Circle, Defs, Line, RadialGradient, Stop } from 'react-native-svg';
 import { Page, Card, Btn, dynStyles } from '../ui';
 import { usePalette } from '../theme';
-import { startAccelerometer, nativeVibrate } from '../native';
+import { startGravity, nativeVibrate } from '../native';
 
 const FLAT_DEG = 1.2;
 const MAX_DEG = 30;
@@ -29,13 +29,15 @@ export default function Level({ onBack }: { onBack: () => void }) {
   const sy = useRef(0);
   const seen = useRef(false);
   const wasFlat = useRef(false);
+  /** 稳定帧计数：OPPO 自家水平仪是「角度变化 > 0.05° 就清零，连续 5 帧稳定才锁定」 */
+  const stable = useRef(0);
 
   useEffect(() => {
-    const stop = startAccelerometer(50, (v) => {
+    const stop = startGravity(50, (v) => {
       if (v.error) {
         setTilt((t) => ({
           ...t,
-          err: v.error === 'no-sensor' ? '设备没有加速度计，无法测量倾角' : `传感器异常：${v.error}`,
+          err: v.error === 'no-sensor' ? '设备没有重力传感器，无法测量倾角' : `传感器异常：${v.error}`,
         }));
         return;
       }
@@ -53,6 +55,9 @@ export default function Level({ onBack }: { onBack: () => void }) {
         sy.current = py;
         seen.current = true;
       } else {
+        // 角度变化超过 0.05° 就重新计时，否则累加稳定帧
+        const moved = Math.abs(px - sx.current) > 0.05 || Math.abs(py - sy.current) > 0.05;
+        stable.current = moved ? 0 : stable.current + 1;
         // 指数平滑，气泡移动不抖
         sx.current += (px - sx.current) * 0.3;
         sy.current += (py - sy.current) * 0.3;
@@ -60,12 +65,13 @@ export default function Level({ onBack }: { onBack: () => void }) {
 
       const hx = sx.current - zeroRef.current.x;
       const hy = sy.current - zeroRef.current.y;
-      const flat = Math.abs(hx) < FLAT_DEG && Math.abs(hy) < FLAT_DEG;
+      // 连续 5 帧稳定（约 0.25s）才认为真的放稳了，避免手一抖就闪「已水平」
+      const flat = Math.abs(hx) < FLAT_DEG && Math.abs(hy) < FLAT_DEG && stable.current >= 5;
 
       setTilt({ x: sx.current, y: sy.current, flat, err: '' });
 
       // 只在「刚进入水平」的瞬间轻震一次
-      if (flat && !wasFlat.current && started) nativeVibrate('0,20');
+      if (flat && !wasFlat.current && started) nativeVibrate('0,22');
       wasFlat.current = flat;
     });
     return stop;
@@ -157,13 +163,27 @@ export default function Level({ onBack }: { onBack: () => void }) {
             />
             <Circle cx={cx} cy={cx} r={2.6} fill={tilt.flat ? p.ok : p.faint} />
 
-            {/* 气泡 */}
+            {/* 气泡：外层一圈柔光，里层实心（OPPO 水平仪是「发光圆环」） */}
+            <Circle
+              cx={cx + dx}
+              cy={cx + dy}
+              r={bubbleR * 1.9}
+              fill={tilt.flat ? p.ok : p.primary}
+              opacity={0.14}
+            />
+            <Circle
+              cx={cx + dx}
+              cy={cx + dy}
+              r={bubbleR * 1.35}
+              fill={tilt.flat ? p.ok : p.primary}
+              opacity={0.2}
+            />
             <Circle
               cx={cx + dx}
               cy={cx + dy}
               r={bubbleR}
               fill={tilt.flat ? p.ok : p.primary}
-              opacity={0.92}
+              opacity={0.95}
             />
           </Svg>
         </View>

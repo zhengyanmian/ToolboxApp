@@ -173,37 +173,14 @@ export function Tap(props: {
   disabled?: boolean;
   scaleTo?: number;
   hitSlop?: number;
-  /** 需要外层已经 overflow:hidden（Btn / Chip / 圆钮 / 磁贴都是），否则光会溢出圆角 */
+  /** 兼容旧调用：Android 涟漪默认开启，这个参数已无作用 */
   glow?: boolean;
   glowColor?: string;
 }) {
   const p = usePalette();
   const v = useRef(new Animated.Value(1)).current;
-  const g = useRef(new Animated.Value(0)).current;
-  const [pt, setPt] = useState<{ x: number; y: number; r: number } | null>(null);
-  const box = useRef({ w: 0, h: 0 });
-  const gid = useMemo(() => `ag${(glassSeed += 1)}`, []);
-  const wantGlow = props.glow === true;
-  const color = props.glowColor ?? (p.isDark ? '#ffffff' : '#8fb8ff');
 
-  const pressIn = (e: any) => {
-    if (wantGlow) {
-      const ne = e?.nativeEvent ?? {};
-      const bw = box.current.w || 0;
-      const bh = box.current.h || 0;
-      setPt({
-        x: ne.locationX ?? bw / 2,
-        y: ne.locationY ?? bh / 2,
-        r: Math.max(24, Math.max(bw, bh) * 0.8),
-      });
-      g.setValue(0);
-      Animated.timing(g, {
-        toValue: 1,
-        duration: 150,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }).start();
-    }
+  const pressIn = () => {
     Animated.spring(v, {
       toValue: props.scaleTo ?? 0.958,
       useNativeDriver: true,
@@ -213,17 +190,6 @@ export function Tap(props: {
   };
 
   const pressOut = () => {
-    if (wantGlow) {
-      Animated.timing(g, {
-        toValue: 0,
-        duration: 340,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }).start(({ finished }) => {
-        // 光晕消失后直接卸载，避免每个按过的按钮都长期挂着一个 SVG 节点
-        if (finished) setPt(null);
-      });
-    }
     Animated.spring(v, {
       toValue: 1,
       useNativeDriver: true,
@@ -240,45 +206,14 @@ export function Tap(props: {
       onLongPress={props.onLongPress}
       onPressIn={pressIn}
       onPressOut={pressOut}
-      onLayout={
-        wantGlow
-          ? (e) => {
-              box.current = { w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height };
-            }
-          : undefined
-      }
+      // 涟漪交给系统渲染（RippleDrawable）：硬件加速、从触点扩散、
+      // 自动按 borderRadius 裁剪。自己用 View/SVG 画的圆永远做不出这个质感。
+      android_ripple={{
+        color: p.isDark ? 'rgba(255,255,255,0.13)' : 'rgba(15,23,42,0.10)',
+        borderless: false,
+      }}
       style={[props.style, { transform: [{ scale: v }] }, props.disabled ? { opacity: 0.45 } : null]}>
       {props.children}
-      {wantGlow && pt ? (
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            StyleSheet.absoluteFill,
-            {
-              opacity: g,
-              transform: [{ scale: g.interpolate({ inputRange: [0, 1], outputRange: [0.62, 1] }) }],
-            },
-          ]}>
-          <Svg width="100%" height="100%">
-            <Defs>
-              <RadialGradient
-                id={gid}
-                cx={pt.x}
-                cy={pt.y}
-                rx={pt.r}
-                ry={pt.r}
-                gradientUnits="userSpaceOnUse">
-                <Stop offset="0" stopColor={color} stopOpacity={p.isDark ? 0.22 : 0.45} />
-                <Stop offset="0.45" stopColor={color} stopOpacity={p.isDark ? 0.1 : 0.22} />
-                <Stop offset="0.75" stopColor={color} stopOpacity={p.isDark ? 0.03 : 0.07} />
-                <Stop offset="1" stopColor={color} stopOpacity={0} />
-              </RadialGradient>
-            </Defs>
-            {/* 用圆而不是矩形：即使渐变渲染异常也不会露出方形边界 */}
-            <Circle cx={pt.x} cy={pt.y} r={pt.r} fill={`url(#${gid})`} />
-          </Svg>
-        </Animated.View>
-      ) : null}
     </A_Press>
   );
 }
@@ -297,6 +232,8 @@ export function Page(props: {
   plain?: boolean;
   /** 不要顶部那段用途说明（计算器这类整屏工具用） */
   noDetail?: boolean;
+  /** 不要头部（整屏工具自己画控件，比如尺子） */
+  headerless?: boolean;
 }) {
   const p = usePalette();
   const insets = useSafeAreaInsets();
@@ -305,11 +242,12 @@ export function Page(props: {
   // 进场动效：整页轻微上移淡入（只做一次，native 驱动）
   const enter = useRef(new Animated.Value(0)).current;
 
+  // 只淡入、不做位移：位移会和页面转场叠在一起，看起来就会「先冒出来再跳到顶上」
   useEffect(() => {
     Animated.timing(enter, {
       toValue: 1,
-      duration: 260,
-      easing: Easing.out(Easing.cubic),
+      duration: 200,
+      easing: Easing.out(Easing.quad),
       useNativeDriver: true,
     }).start();
   }, [enter]);
@@ -339,15 +277,9 @@ export function Page(props: {
   return (
     <View style={{ flex: 1, backgroundColor: p.bg }}>
       <Background />
-      <Animated.View
-        style={{
-          flex: 1,
-          opacity: enter,
-          transform: [
-            { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) },
-          ],
-        }}>
+      <Animated.View style={{ flex: 1, opacity: enter }}>
         {/* 头部：一颗独立的圆形返回按钮 + 居中的纯文字标题（不再做成一条长条） */}
+        {props.headerless ? null : (
         <View
           style={{
             paddingTop: insets.top + 8,
@@ -370,6 +302,7 @@ export function Page(props: {
             {props.right}
           </View>
         </View>
+        )}
         {props.scroll === false ? (
           <View style={[{ flex: 1, padding: 14 }, props.contentStyle]}>{body}</View>
         ) : (
@@ -511,7 +444,6 @@ export function Btn(props: {
         },
         props.style,
       ]}>
-      {k.tone ? <GlassLayer radius={radius} tone={k.tone} /> : null}
       {props.icon ? <Icon name={props.icon} size={sm ? 15 : 17} color={k.fg} /> : null}
       <Text style={{ color: k.fg, fontSize: sm ? 13 : 14.5, fontWeight: '600' }} numberOfLines={1}>
         {props.text}
@@ -547,7 +479,6 @@ export function Chip(props: {
         },
         props.style,
       ]}>
-      <GlassLayer radius={999} tone={props.active ? 'primary' : 'button'} />
       {props.icon ? (
         <Icon name={props.icon} size={14} color={props.active ? p.onPrimary : p.sub} />
       ) : null}

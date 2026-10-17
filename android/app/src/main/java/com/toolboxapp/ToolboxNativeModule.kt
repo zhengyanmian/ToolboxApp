@@ -159,12 +159,21 @@ class ToolboxNativeModule(private val reactContext: ReactApplicationContext) :
     }
   }
 
-  /** 指南针：加速度计 + 磁力计融合解算航向 */
+  /**
+   * 指南针：优先注册系统合成传感器 TYPE_ORIENTATION 直读方位角。
+   * 这条路一帧就能出数；只有设备没提供它时才退回「磁力计 + 加速度计」融合。
+   */
   @ReactMethod
   fun startCompass(intervalMs: Int) {
     try {
       ensureSensors()
       mode = "compass"
+      val micros = (intervalMs * 1000).coerceAtLeast(10000)
+      val ori = sensorManager?.getDefaultSensor(Sensor.TYPE_ORIENTATION)
+      if (ori != null) {
+        sensorManager?.registerListener(this, ori, micros)
+        return
+      }
       val m = magSensor
       val a = accSensor
       if (m == null || a == null) {
@@ -172,11 +181,31 @@ class ToolboxNativeModule(private val reactContext: ReactApplicationContext) :
         emit("CompassUpdate", p)
         return
       }
-      sensorManager?.registerListener(this, m, (intervalMs * 1000).coerceAtLeast(10000))
-      sensorManager?.registerListener(this, a, (intervalMs * 1000).coerceAtLeast(10000))
+      sensorManager?.registerListener(this, m, micros)
+      sensorManager?.registerListener(this, a, micros)
     } catch (e: Exception) {
       val p = Arguments.createMap(); p.putString("error", e.message ?: "unknown")
       emit("CompassUpdate", p)
+    }
+  }
+
+  /** 水平仪：注册 TYPE_GRAVITY（系统已经把线性加速度滤掉了，比原始加速度计干净得多） */
+  @ReactMethod
+  fun startGravity(intervalMs: Int) {
+    try {
+      ensureSensors()
+      mode = "gravity"
+      val s = sensorManager?.getDefaultSensor(Sensor.TYPE_GRAVITY)
+        ?: sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+      if (s == null) {
+        val p = Arguments.createMap(); p.putString("error", "no-sensor")
+        emit("GravityUpdate", p)
+        return
+      }
+      sensorManager?.registerListener(this, s, (intervalMs * 1000).coerceAtLeast(10000))
+    } catch (e: Exception) {
+      val p = Arguments.createMap(); p.putString("error", e.message ?: "unknown")
+      emit("GravityUpdate", p)
     }
   }
 
@@ -193,6 +222,28 @@ class ToolboxNativeModule(private val reactContext: ReactApplicationContext) :
     event ?: return
     try {
       when (event.sensor.type) {
+        Sensor.TYPE_ORIENTATION -> {
+          // values: [0]=方位角（磁北，0~360）, [1]=pitch, [2]=roll
+          if (mode == "compass") {
+            var h = event.values[0].toDouble()
+            if (h < 0) h += 360.0
+            val p = Arguments.createMap()
+            p.putDouble("heading", h)
+            p.putDouble("pitch", event.values[1].toDouble())
+            p.putDouble("roll", event.values[2].toDouble())
+            p.putBoolean("exact", true)
+            emit("CompassUpdate", p)
+          }
+        }
+        Sensor.TYPE_GRAVITY -> {
+          if (mode == "gravity") {
+            val p = Arguments.createMap()
+            p.putDouble("x", event.values[0].toDouble())
+            p.putDouble("y", event.values[1].toDouble())
+            p.putDouble("z", event.values[2].toDouble())
+            emit("GravityUpdate", p)
+          }
+        }
         Sensor.TYPE_ACCELEROMETER -> {
           accVals = event.values.clone()
           if (mode == "acc") {
@@ -283,6 +334,17 @@ class ToolboxNativeModule(private val reactContext: ReactApplicationContext) :
       val v = vibrator() ?: return
       val seq = pattern.split(",").mapNotNull { it.trim().toLongOrNull() }
       if (seq.isEmpty()) return
+      // 点击类短震（0,<=40）用系统预置效果：线性马达上「哒」得干脆，
+      // 用 waveform 下发 20ms 在很多机型上根本感觉不到。
+      if (Build.VERSION.SDK_INT >= 30 && seq.size == 2 && seq[0] == 0L && seq[1] in 1L..80L) {
+        val effect = when {
+          seq[1] <= 20L -> VibrationEffect.EFFECT_TICK
+          seq[1] <= 45L -> VibrationEffect.EFFECT_CLICK
+          else -> VibrationEffect.EFFECT_HEAVY_CLICK
+        }
+        v.vibrate(VibrationEffect.createPredefined(effect))
+        return
+      }
       if (Build.VERSION.SDK_INT >= 26) {
         v.vibrate(VibrationEffect.createWaveform(seq.toLongArray(), -1))
       } else {
@@ -384,6 +446,24 @@ class ToolboxNativeModule(private val reactContext: ReactApplicationContext) :
   }
 
   // ---------- 设备详情 ----------
+
+  /** 真实屏幕参数：xdpi/ydpi 是物理像素密度，做尺子必须用它而不是 densityDpi */
+  @ReactMethod
+  fun getDisplayMetrics(promise: Promise) {
+    try {
+      val dm = reactContext.resources.displayMetrics
+      val p = Arguments.createMap()
+      p.putDouble("widthPx", dm.widthPixels.toDouble())
+      p.putDouble("heightPx", dm.heightPixels.toDouble())
+      p.putDouble("xdpi", dm.xdpi.toDouble())
+      p.putDouble("ydpi", dm.ydpi.toDouble())
+      p.putDouble("densityDpi", dm.densityDpi.toDouble())
+      p.putDouble("density", dm.density.toDouble())
+      promise.resolve(p)
+    } catch (e: Exception) {
+      promise.reject("E_METRICS", e.message ?: "无法读取屏幕参数")
+    }
+  }
 
   @ReactMethod
   fun getDeviceInfo(promise: Promise) {

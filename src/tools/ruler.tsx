@@ -3,94 +3,93 @@ import {
   Modal,
   PanResponder,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {
-  Btn,
-  Card,
-  Chip,
-  GlassLayer,
-  Icon,
-  KV,
-  Page,
-  Row,
-  SectionTitle,
-  Tap,
-  dynStyles,
-} from '../ui';
+import { Btn, Chip, GlassLayer, Icon, Page, Tap, dynStyles } from '../ui';
 import type { IconName } from '../icons';
-import { setOrientation } from '../native';
 import { usePalette } from '../theme';
+import { getScreenMetrics, setImmersive, setOrientation } from '../native';
 
-/** Android 标准换算：1dp = 1/160 英寸 → 1cm = 37.795dp */
-const DP_PER_CM = 37.7952755906;
-const DP_PER_MM = DP_PER_CM / 10;
-const SCALE_KEY = 'toolbox.ruler.scale';
+/** 名义换算：1dp = 1/160 英寸。真实值优先取屏幕的 xdpi（见下） */
+const NOMINAL_DP_PER_MM = 37.7952755906 / 10;
+const SCALE_KEY = 'toolbox.ruler.dpmm';
 
-/** 校准参照物 */
 const KNOWN = [
-  { label: '银行卡短边', mm: 53.98, hint: '银行卡宽度 53.98mm' },
-  { label: '银行卡长边', mm: 85.6, hint: '银行卡长度 85.6mm' },
-  { label: 'A4 短边', mm: 210, hint: 'A4 纸宽度 210mm' },
-  { label: 'A4 长边', mm: 297, hint: 'A4 纸高度 297mm' },
+  { label: '银行卡短边', mm: 53.98 },
+  { label: '银行卡长边', mm: 85.6 },
+  { label: 'A4 短边', mm: 210 },
+  { label: 'A4 长边', mm: 297 },
 ];
 
 export default function Ruler({ onBack }: { onBack: () => void }) {
   const p = usePalette();
+  const { width } = useWindowDimensions();
 
-  /** 固定横屏、刻度贴屏幕长边 */
-  const vertical = false;
+  const [dpPerMm, setDpPerMm] = useState(NOMINAL_DP_PER_MM);
+  const [baseDpPerMm, setBaseDpPerMm] = useState(NOMINAL_DP_PER_MM);
   const [cms, setCms] = useState(15);
-  const [k, setK] = useState(1);
   const [cursor, setCursor] = useState(0);
   const [area, setArea] = useState({ w: 0, h: 0 });
   const [sheet, setSheet] = useState(false);
   const [knownIdx, setKnownIdx] = useState(1);
   const [mmText, setMmText] = useState('85.6');
+  const [autoFit, setAutoFit] = useState(true);
 
-  // 尺子必须贴着屏幕长边量东西：进入即锁横屏，离开恢复
+  /* 尺子要贴着屏幕长边量东西：进入即锁横屏 + 沉浸（隐藏状态栏），离开恢复 */
   useEffect(() => {
     setOrientation('landscape');
-    return () => setOrientation('auto');
+    setImmersive(true);
+    return () => {
+      setOrientation('auto');
+      setImmersive(false);
+    };
   }, []);
 
+  /* 物理尺寸：优先用真实 xdpi，而不是 densityDpi（后者只决定排版大小） */
   useEffect(() => {
-    AsyncStorage.getItem(SCALE_KEY)
-      .then((v) => {
-        const n = v ? parseFloat(v) : NaN;
-        if (isFinite(n) && n > 0.3 && n < 3) setK(n);
-      })
-      .catch(() => {});
+    let alive = true;
+    (async () => {
+      const m = await getScreenMetrics();
+      if (!alive) return;
+      let base = NOMINAL_DP_PER_MM;
+      if (m && m.xdpi > 100 && m.xdpi < 900) {
+        const density = m.density || m.densityDpi / 160 || 1;
+        const v = m.xdpi / 25.4 / density;
+        if (v > 2 && v < 12) base = v;
+      }
+      setBaseDpPerMm(base);
+      const saved = await AsyncStorage.getItem(SCALE_KEY);
+      const n = saved ? parseFloat(saved) : NaN;
+      setDpPerMm(isFinite(n) && n > 1 && n < 20 ? n : base);
+    })();
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  const dpPerMm = DP_PER_MM * k;
   const totalMm = Math.max(10, Math.round(cms * 10));
-  const len = vertical ? area.h : area.w;
+  const len = area.w || width;
 
-  const ref = useRef({ vertical, len });
-  ref.current = { vertical, len };
+  const ref = useRef({ len });
+  ref.current = { len };
   const startPos = useRef(0);
-  const cursorRef = useRef(0);
-  cursorRef.current = cursor;
 
   const pan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (e) => {
-        const { locationX, locationY } = e.nativeEvent;
-        const v = ref.current.vertical ? locationY : locationX;
+        const v = e.nativeEvent.locationX;
         startPos.current = v;
         setCursor(Math.max(0, Math.min(ref.current.len, v)));
       },
       onPanResponderMove: (_e, g) => {
-        const d = ref.current.vertical ? g.dy : g.dx;
-        setCursor(Math.max(0, Math.min(ref.current.len, startPos.current + d)));
+        setCursor(Math.max(0, Math.min(ref.current.len, startPos.current + g.dx)));
       },
     }),
   ).current;
@@ -99,285 +98,222 @@ export default function Ruler({ onBack }: { onBack: () => void }) {
     const out: { pos: number; mm: number; major: boolean; mid: boolean }[] = [];
     for (let mm = 0; mm <= totalMm; mm++) {
       const pos = mm * dpPerMm;
-      if (len > 0 && pos > len + 0.5) break;
+      if (pos > len + 0.5) break;
       out.push({ pos, mm, major: mm % 10 === 0, mid: mm % 5 === 0 });
     }
     return out;
   }, [totalMm, dpPerMm, len]);
 
+  /* 第一次拿到宽度时让量程自动铺满屏幕长边（固定 15cm 在横屏下会显得太短） */
+  useEffect(() => {
+    if (!autoFit || !area.w || !dpPerMm) return;
+    const fitCm = Math.floor(area.w / (dpPerMm * 10));
+    if (fitCm >= 5) setCms(Math.min(40, fitCm));
+    setAutoFit(false);
+  }, [area.w, dpPerMm, autoFit]);
+
   const cursorMm = dpPerMm > 0 ? cursor / dpPerMm : 0;
   const realMm = parseFloat(mmText);
-  const previewK =
-    isFinite(realMm) && realMm > 0 && cursorMm > 0 ? (cursorMm * k) / realMm : k;
+  const k = dpPerMm / baseDpPerMm;
 
   const applyCalib = useCallback(() => {
     if (!(isFinite(realMm) && realMm > 0) || cursorMm <= 1) return;
-    const nk = Math.max(0.3, Math.min(3, (cursorMm * k) / realMm));
-    setK(nk);
-    AsyncStorage.setItem(SCALE_KEY, String(nk)).catch(() => {});
+    const next = Math.max(1, Math.min(20, cursor / realMm));
+    setDpPerMm(next);
+    AsyncStorage.setItem(SCALE_KEY, String(next)).catch(() => {});
     setSheet(false);
-  }, [realMm, cursorMm, k]);
+  }, [realMm, cursorMm, cursor]);
 
   const resetDefault = useCallback(() => {
-    setK(1);
-    AsyncStorage.setItem(SCALE_KEY, '1').catch(() => {});
-  }, []);
+    setDpPerMm(baseDpPerMm);
+    AsyncStorage.setItem(SCALE_KEY, String(baseDpPerMm)).catch(() => {});
+  }, [baseDpPerMm]);
 
+  const stripH = 116;
   const cursorPos = Math.max(0, Math.min(len, cursor));
-  const stripH = 92;
 
   return (
-    <Page id="ruler" title="尺子" onBack={onBack} scroll={false} contentStyle={{ padding: 0 }}>
+    <Page
+      id="ruler"
+      title="尺子"
+      onBack={onBack}
+      scroll={false}
+      headerless
+      noDetail
+      contentStyle={{ padding: 0 }}>
       <View style={st.root}>
-        {/* 工具条 */}
-        <View style={st.toolbar}>
-          <GBtn name="minus" disabled={cms <= 5} onPress={() => setCms((c) => Math.max(5, c - 5))} />
-          <Text style={[st.len, { color: p.text }]}>{cms} cm</Text>
-          <GBtn name="plus" disabled={cms >= 40} onPress={() => setCms((c) => Math.min(40, c + 5))} />
-          <View style={{ flex: 1 }} />
-          <Text style={[st.kTxt, { color: p.faint }]}>k {k.toFixed(4)}</Text>
+        {/* 尺身：贴屏幕最上沿，0 刻度就在屏幕边缘 */}
+        <View
+          style={[st.strip, { height: stripH, backgroundColor: p.cardSolid, borderColor: p.line }]}
+          onLayout={(e) =>
+            setArea({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })
+          }
+          {...pan.panHandlers}>
+          {ticks.map((t) => {
+            const size = t.major ? 30 : t.mid ? 19 : 11;
+            return (
+              <React.Fragment key={t.mm}>
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute',
+                    left: t.pos,
+                    top: 0,
+                    width: t.major ? 1.5 : 1,
+                    height: size,
+                    backgroundColor: t.major ? p.text : t.mid ? p.sub : p.faint,
+                  }}
+                />
+                {t.major ? (
+                  <Text style={[st.num, { left: t.pos + 3, color: p.sub }]}>{t.mm / 10}</Text>
+                ) : null}
+              </React.Fragment>
+            );
+          })}
+          {cursor > 0 ? (
+            <>
+              <View
+                pointerEvents="none"
+                style={[st.cursor, { left: cursorPos, backgroundColor: p.primary }]}
+              />
+              <View
+                pointerEvents="none"
+                style={[
+                  st.tag,
+                  {
+                    left: Math.max(4, Math.min(Math.max(4, len - 74), cursorPos - 34)),
+                    backgroundColor: p.primary,
+                  },
+                ]}>
+                <Text style={st.tagTxt}>{cursorMm.toFixed(1)} mm</Text>
+              </View>
+            </>
+          ) : null}
         </View>
 
-        {/* 尺身：贴着屏幕的一条边，0 刻度就在边缘上 */}
-        <>
-          <View
-            style={[
-              st.stripH,
-              { height: stripH, backgroundColor: p.cardSolid, borderColor: p.line },
-            ]}
-            onLayout={(e) =>
-              setArea({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })
-            }
-            {...pan.panHandlers}>
-            <GlassLayer radius={0} tone="card" />
-            {ticks.map((t) => {
-              const size = t.major ? 26 : t.mid ? 16 : 9;
-              return (
-                <React.Fragment key={t.mm}>
-                  <View
-                    pointerEvents="none"
-                    style={{
-                      position: 'absolute',
-                      left: t.pos,
-                      top: 0,
-                      width: 1,
-                      height: size,
-                      backgroundColor: t.major ? p.text : t.mid ? p.sub : p.faint,
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={[st.hint, { color: p.faint }]}>
+            把物体一端对准屏幕边缘，滑动尺身拖出读数线
+          </Text>
+        </View>
+
+        {/* 底部悬浮控件 */}
+        <View style={st.dock}>
+          <Tap
+            onPress={onBack}
+            glow
+            style={[st.round, { backgroundColor: p.chip, borderColor: p.chipBorder }]}>
+            <Icon name="chevron" size={20} color={p.text} />
+          </Tap>
+
+          <View style={[st.pill, { backgroundColor: p.card, borderColor: p.cardBorder }]}>
+            <GBtn name="minus" onPress={() => setCms((c) => Math.max(2, c - 1))} />
+            <Text style={[st.len, { color: p.text }]}>{cms} cm</Text>
+            <GBtn name="plus" onPress={() => setCms((c) => Math.min(40, c + 1))} />
+          </View>
+
+          <Tap
+            onPress={() => setSheet(true)}
+            glow
+            style={[st.round, st.calib, { backgroundColor: p.primary, borderColor: 'transparent' }]}>
+            <Icon name="target" size={19} color={p.onPrimary} />
+          </Tap>
+        </View>
+
+        <Modal
+          visible={sheet}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSheet(false)}>
+          <Pressable
+            onPress={() => setSheet(false)}
+            style={{ flex: 1, backgroundColor: p.overlay, justifyContent: 'flex-end' }}>
+            <Pressable
+              onPress={() => {}}
+              style={{
+                backgroundColor: p.cardSolid,
+                borderTopLeftRadius: 26,
+                borderTopRightRadius: 26,
+                padding: 18,
+                paddingBottom: 24,
+                overflow: 'hidden',
+                borderTopWidth: StyleSheet.hairlineWidth,
+                borderColor: p.cardBorder,
+              }}>
+              <GlassLayer radius={26} tone="card" />
+              <View style={st.sheetHead}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: p.text }}>校准尺子</Text>
+                <Tap onPress={() => setSheet(false)} hitSlop={10}>
+                  <Icon name="close" size={20} color={p.sub} />
+                </Tap>
+              </View>
+              <Text style={[st.note, { color: p.sub }]}>
+                先把物体一端对齐屏幕上的 0 刻度，再把读数线拖到另一端，然后选一个已知尺寸的参照物点应用。
+              </Text>
+
+              <View style={st.readRow}>
+                <View style={[st.readBox, { backgroundColor: p.primarySoft }]}>
+                  <Text style={{ fontSize: 11.5, color: p.sub }}>读数线</Text>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: p.primary }}>
+                    {cursorMm.toFixed(1)} mm
+                  </Text>
+                </View>
+                <Icon name="next" size={16} color={p.faint} />
+                <View style={[st.readBox, { backgroundColor: p.chip }]}>
+                  <Text style={{ fontSize: 11.5, color: p.sub }}>当前比例</Text>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: p.text }}>
+                    {k.toFixed(3)}×
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={[st.sheetLabel, { color: p.text }]}>选择校准方式</Text>
+              <View style={st.chipWrap}>
+                {KNOWN.map((o, i) => (
+                  <Chip
+                    key={o.label}
+                    text={`${o.label} ${o.mm}mm`}
+                    active={knownIdx === i}
+                    onPress={() => {
+                      setKnownIdx(i);
+                      setMmText(String(o.mm));
                     }}
                   />
-                  {t.major ? (
-                    <Text style={[st.numH, { left: t.pos + 2, color: p.sub }]}>{t.mm / 10}</Text>
-                  ) : null}
-                </React.Fragment>
-              );
-            })}
-            <View
-              pointerEvents="none"
-              style={[st.curH, { left: cursorPos, backgroundColor: p.primary }]}
-            />
-            <View
-              pointerEvents="none"
-              style={[
-                st.cursorTag,
-                {
-                  left: Math.max(4, Math.min(Math.max(4, len - 62), cursorPos - 30)),
-                  backgroundColor: p.primary,
-                },
-              ]}>
-              <Text style={st.cursorTxt}>{cursorMm.toFixed(1)} mm</Text>
-            </View>
-          </View>
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 90 }}>
-            <InfoPanel
-              k={k}
-              cms={cms}
-              totalMm={totalMm}
-              cursorMm={cursorMm}
-              onCalib={() => setSheet(true)}
-            />
-          </ScrollView>
-        </>
+                ))}
+              </View>
 
-        {/* 校准入口：右下角一颗按钮 */}
-        <Tap
-          onPress={() => setSheet(true)}
-          scaleTo={0.92}
-          style={[st.fab, { backgroundColor: p.primary }]}>
-          <GlassLayer radius={999} tone="primary" />
-          <Icon name="target" size={19} color={p.onPrimary} />
-          <Text style={[st.fabTxt, { color: p.onPrimary }]}>校准</Text>
-        </Tap>
+              <Text style={[st.sheetLabel, { color: p.text, marginTop: 12 }]}>
+                或输入实测长度（毫米）
+              </Text>
+              <View style={[st.inputWrap, { backgroundColor: p.input, borderColor: p.line }]}>
+                <TextInput
+                  value={mmText}
+                  onChangeText={setMmText}
+                  keyboardType="decimal-pad"
+                  placeholder="例如 85.6"
+                  placeholderTextColor={p.faint}
+                  style={{ flex: 1, fontSize: 16, color: p.text, paddingVertical: 11 }}
+                />
+                <Text style={{ fontSize: 13, color: p.sub }}>mm</Text>
+              </View>
 
-        <CalibSheet
-          visible={sheet}
-          onClose={() => setSheet(false)}
-          k={k}
-          cursorMm={cursorMm}
-          previewK={previewK}
-          knownIdx={knownIdx}
-          mmText={mmText}
-          onPickKnown={(i) => {
-            setKnownIdx(i);
-            setMmText(String(KNOWN[i].mm));
-          }}
-          onChangeMm={setMmText}
-          onApply={applyCalib}
-          onReset={resetDefault}
-        />
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+                <Btn text="恢复默认" kind="ghost" fit icon="refresh" onPress={resetDefault} />
+                <Btn text="应用校准" icon="check" onPress={applyCalib} style={{ flex: 1 }} />
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
       </View>
     </Page>
   );
 }
 
-function InfoPanel(props: {
-  k: number;
-  cms: number;
-  totalMm: number;
-  cursorMm: number;
-  onCalib: () => void;
-}) {
+function GBtn(props: { name: IconName; onPress: () => void }) {
   const p = usePalette();
   return (
-    <View style={{ padding: 14, paddingTop: 12 }}>
-      <Card pad={13}>
-        <SectionTitle text="读数" style={{ marginTop: 0 }} />
-        <Text style={[st.bigNum, { color: p.primary }]}>{props.cursorMm.toFixed(1)}</Text>
-        <Text style={[st.bigUnit, { color: p.sub }]}>
-          毫米 · 约 {(props.cursorMm / 10).toFixed(2)} 厘米
-        </Text>
-        <Text style={[st.tip, { color: p.faint }]}>
-          用手指在尺身上滑动可以拖出读数线，把尺子刻度边对准物体一端、读数线对准另一端即可。
-        </Text>
-      </Card>
-
-      <Card pad={13}>
-        <KV k="校正系数 k" v={props.k.toFixed(4)} />
-        <KV
-          k="相对标准误差"
-          v={`${props.k >= 1 ? '+' : ''}${((props.k - 1) * 100).toFixed(2)}%`}
-        />
-        <KV k="当前量程" v={`${props.cms} cm · ${props.totalMm} mm`} />
-        <Text style={[st.tip, { color: p.faint }]}>
-          标准换算 1cm = {DP_PER_CM.toFixed(3)}dp（Android 1dp = 1/160 英寸）。屏幕标称密度与实际物理
-          尺寸可能有 ±2% 偏差，拿银行卡或 A4 纸比对一下就能校准。
-        </Text>
-        <View style={{ marginTop: 10 }}>
-          <Btn text="打开校准" icon="target" size="sm" onPress={props.onCalib} />
-        </View>
-      </Card>
-    </View>
-  );
-}
-
-function CalibSheet(props: {
-  visible: boolean;
-  onClose: () => void;
-  k: number;
-  cursorMm: number;
-  previewK: number;
-  knownIdx: number;
-  mmText: string;
-  onPickKnown: (i: number) => void;
-  onChangeMm: (v: string) => void;
-  onApply: () => void;
-  onReset: () => void;
-}) {
-  const p = usePalette();
-  return (
-    <Modal visible={props.visible} transparent animationType="fade" onRequestClose={props.onClose}>
-      <Pressable
-        onPress={props.onClose}
-        style={{ flex: 1, backgroundColor: p.overlay, justifyContent: 'flex-end' }}>
-        <Pressable
-          onPress={() => {}}
-          style={{
-            backgroundColor: p.cardSolid,
-            borderTopLeftRadius: 26,
-            borderTopRightRadius: 26,
-            padding: 18,
-            paddingBottom: 24,
-            overflow: 'hidden',
-            borderTopWidth: StyleSheet.hairlineWidth,
-            borderColor: p.cardBorder,
-          }}>
-          <GlassLayer radius={26} tone="card" />
-          <View style={st.sheetHead}>
-            <Text style={{ fontSize: 16, fontWeight: '700', color: p.text }}>校准尺子</Text>
-            <Tap onPress={props.onClose} hitSlop={10}>
-              <Icon name="close" size={20} color={p.sub} />
-            </Tap>
-          </View>
-          <Text style={[st.tip, { color: p.sub, marginTop: 2 }]}>
-            第 1 步：把物体的一端对齐屏幕上的 0 刻度。第 2 步：滑动尺身把读数线拖到物体另一端。
-            第 3 步：下面选一个已知尺寸的参照物，点应用。
-          </Text>
-
-          <View style={st.readRow}>
-            <View style={[st.readBox, { backgroundColor: p.primarySoft }]}>
-              <Text style={{ fontSize: 11.5, color: p.sub }}>读数线</Text>
-              <Text style={{ fontSize: 19, fontWeight: '800', color: p.primary }}>
-                {props.cursorMm.toFixed(1)} mm
-              </Text>
-            </View>
-            <Icon name="next" size={16} color={p.faint} />
-            <View style={[st.readBox, { backgroundColor: p.chip }]}>
-              <Text style={{ fontSize: 11.5, color: p.sub }}>应用后 k</Text>
-              <Text style={{ fontSize: 19, fontWeight: '800', color: p.text }}>
-                {props.previewK.toFixed(4)}
-              </Text>
-            </View>
-          </View>
-
-          <Text style={[st.sheetLabel, { color: p.text }]}>选择校准方式</Text>
-          <View style={st.chipWrap}>
-            {KNOWN.map((o, i) => (
-              <Chip
-                key={o.label}
-                text={`${o.label} ${o.mm}mm`}
-                active={props.knownIdx === i}
-                onPress={() => props.onPickKnown(i)}
-              />
-            ))}
-          </View>
-
-          <Text style={[st.sheetLabel, { color: p.text, marginTop: 12 }]}>或输入实测长度（毫米）</Text>
-          <View style={[st.inputWrap, { backgroundColor: p.input, borderColor: p.line }]}>
-            <TextInput
-              value={props.mmText}
-              onChangeText={props.onChangeMm}
-              keyboardType="decimal-pad"
-              placeholder="例如 85.6"
-              placeholderTextColor={p.faint}
-              style={{ flex: 1, fontSize: 16, color: p.text, paddingVertical: 11 }}
-            />
-            <Text style={{ fontSize: 13, color: p.sub }}>mm</Text>
-          </View>
-
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
-            <Btn text="恢复 k=1" kind="ghost" fit icon="refresh" onPress={props.onReset} />
-            <Btn text="应用校准" icon="check" onPress={props.onApply} style={{ flex: 1 }} />
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
-function GBtn(props: { name: IconName; onPress: () => void; active?: boolean; disabled?: boolean }) {
-  const p = usePalette();
-  return (
-    <Tap
-      onPress={props.onPress}
-      disabled={props.disabled}
-      scaleTo={0.9}
-      style={[
-        st.gbtn,
-        {
-          backgroundColor: props.active ? p.primary : p.chip,
-          borderColor: props.active ? 'transparent' : p.chipBorder,
-        },
-      ]}>
-      <Icon name={props.name} size={17} color={props.active ? p.onPrimary : p.text} />
+    <Tap onPress={props.onPress} glow scaleTo={0.9} style={st.gbtn} hitSlop={6}>
+      <Icon name={props.name} size={17} color={p.text} />
     </Tap>
   );
 }
@@ -385,67 +321,56 @@ function GBtn(props: { name: IconName; onPress: () => void; active?: boolean; di
 const st = dynStyles((C) =>
   StyleSheet.create({
     root: { flex: 1 },
-    toolbar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-    },
-    gbtn: {
-      width: 34,
-      height: 34,
-      borderRadius: 17,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: StyleSheet.hairlineWidth,
-    },
-    len: { fontSize: 13, fontWeight: '700', minWidth: 46, textAlign: 'center' },
-    kTxt: { fontSize: 11.5, fontWeight: '600' },
-    stageRow: { flexDirection: 'row', flex: 1 },
-    stripH: {
+    strip: {
       alignSelf: 'stretch',
       overflow: 'hidden',
-      borderTopWidth: StyleSheet.hairlineWidth,
       borderBottomWidth: StyleSheet.hairlineWidth,
     },
-    stripV: {
-      alignSelf: 'stretch',
-      overflow: 'hidden',
-      borderRightWidth: StyleSheet.hairlineWidth,
-    },
-    numH: { position: 'absolute', top: 30, fontSize: 10 },
-    numV: { position: 'absolute', left: 30, width: 40, fontSize: 10 },
-    curH: { position: 'absolute', top: 0, bottom: 0, width: 2 },
-    curV: { position: 'absolute', left: 0, right: 0, height: 2 },
-    cursorTag: {
+    num: { position: 'absolute', top: 34, fontSize: 11, fontWeight: '600' },
+    cursor: { position: 'absolute', top: 0, bottom: 0, width: 2 },
+    tag: {
       position: 'absolute',
-      top: 54,
-      minWidth: 60,
-      paddingHorizontal: 7,
+      top: 74,
+      minWidth: 68,
+      paddingHorizontal: 8,
       paddingVertical: 3,
       borderRadius: 9,
       alignItems: 'center',
     },
-    cursorTxt: { color: '#ffffff', fontSize: 10.5, fontWeight: '700' },
-    bigNum: { fontSize: 40, fontWeight: '800', fontVariant: ['tabular-nums'] },
-    bigUnit: { fontSize: 12.5, marginTop: 2 },
-    tip: { fontSize: 11.5, lineHeight: 17, marginTop: 8 },
-    fab: {
-      position: 'absolute',
-      right: 16,
-      bottom: 22,
+    tagTxt: { color: '#ffffff', fontSize: 10.5, fontWeight: '700' },
+    hint: { fontSize: 12, textAlign: 'center', paddingHorizontal: 30 },
+    dock: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
+      justifyContent: 'space-between',
       paddingHorizontal: 16,
-      paddingVertical: 12,
-      borderRadius: 999,
+      paddingBottom: 14,
+    },
+    round: {
+      width: 46,
+      height: 46,
+      borderRadius: 23,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: StyleSheet.hairlineWidth,
       overflow: 'hidden',
     },
-    fabTxt: { fontSize: 14, fontWeight: '700' },
+    calib: { width: 52, height: 52, borderRadius: 26 },
+    pill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 6,
+      paddingVertical: 4,
+      borderRadius: 999,
+      borderWidth: StyleSheet.hairlineWidth,
+      overflow: 'hidden',
+    },
+    gbtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+    len: { fontSize: 14, fontWeight: '700', minWidth: 52, textAlign: 'center' },
     sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     sheetLabel: { fontSize: 12.5, fontWeight: '700', marginTop: 14, marginBottom: 8 },
+    note: { fontSize: 11.5, lineHeight: 17, marginTop: 6 },
     readRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
     readBox: { flex: 1, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 9 },
     chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

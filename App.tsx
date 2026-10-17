@@ -232,10 +232,7 @@ function Root() {
           style={{
             flex: 1,
             opacity: nav,
-            transform: [
-              { translateX: nav.interpolate({ inputRange: [0, 1], outputRange: [34, 0] }) },
-              { scale: nav.interpolate({ inputRange: [0, 1], outputRange: [0.985, 1] }) },
-            ],
+            transform: [{ scale: nav.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }],
           }}>
           <tool.component onBack={goHome} />
         </Animated.View>
@@ -328,8 +325,8 @@ function ToolTile(props: { tool: ToolDef; index: number; onPress: () => void }) 
   return (
     <Animated.View
       style={{
-        width: '31.5%',
-        flexGrow: 1,
+        width: '31.6%',
+        alignSelf: 'flex-start',
         opacity: a,
         transform: [{ translateY: a.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }],
       }}>
