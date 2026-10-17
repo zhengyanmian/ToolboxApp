@@ -75,10 +75,41 @@ function Root() {
   const [cat, setCat] = useState<string>('全部');
   const insets = useSafeAreaInsets();
 
+  /* 页面转场：首页 ↔ 工具页各自从缩小的状态淡入，返回时也有动画（不再瞬间切回） */
+  const nav = useRef(new Animated.Value(0)).current;
+  const homeIn = useRef(new Animated.Value(1)).current;
+
+  const openTool = (id: string) => {
+    nav.setValue(0);
+    homeIn.setValue(1);
+    setStack(id);
+  };
+
+  const goHome = () => {
+    homeIn.setValue(0);
+    setStack(null);
+    Animated.timing(homeIn, {
+      toValue: 1,
+      duration: 280,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  };
+
+  useEffect(() => {
+    if (!stack) return;
+    Animated.timing(nav, {
+      toValue: 1,
+      duration: 300,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [stack, nav]);
+
   useEffect(() => {
     if (!stack) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      setStack(null);
+      goHome();
       return true;
     });
     return () => sub.remove();
@@ -111,7 +142,18 @@ function Root() {
     <View style={{ flex: 1, backgroundColor: p.bg }}>
       <Background />
       {/* 首页常驻不卸载，返回时滚动位置不丢 */}
-      <View style={[{ flex: 1 }, tool ? { display: 'none' } : null]}>
+      <Animated.View
+        style={[
+          { flex: 1 },
+          tool ? { display: 'none' } : null,
+          {
+            opacity: homeIn.interpolate({ inputRange: [0, 1], outputRange: [0.25, 1] }),
+            transform: [
+              { scale: homeIn.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) },
+              { translateY: homeIn.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
+            ],
+          },
+        ]}>
         <ScrollView
           contentContainerStyle={{
             paddingTop: insets.top + 14,
@@ -161,7 +203,7 @@ function Root() {
                 />
                 <View style={styles.grid}>
                   {list.map((t, i) => (
-                    <ToolTile key={t.id} tool={t} index={i} onPress={() => setStack(t.id)} />
+                    <ToolTile key={t.id} tool={t} index={i} onPress={() => openTool(t.id)} />
                   ))}
                 </View>
               </View>
@@ -175,12 +217,20 @@ function Root() {
             右上角点按切换深/浅色，长按恢复跟随系统
           </Text>
         </ScrollView>
-      </View>
+      </Animated.View>
 
       {tool ? (
-        <View style={{ flex: 1 }}>
-          <tool.component onBack={() => setStack(null)} />
-        </View>
+        <Animated.View
+          style={{
+            flex: 1,
+            opacity: nav,
+            transform: [
+              { translateX: nav.interpolate({ inputRange: [0, 1], outputRange: [34, 0] }) },
+              { scale: nav.interpolate({ inputRange: [0, 1], outputRange: [0.985, 1] }) },
+            ],
+          }}>
+          <tool.component onBack={goHome} />
+        </Animated.View>
       ) : null}
     </View>
   );
@@ -209,15 +259,16 @@ function SearchBar(props: { value: string; onChange: (v: string) => void }) {
         alignItems: 'center',
         gap: 8,
         marginTop: 14,
-        paddingHorizontal: 14,
-        borderRadius: 16,
+        paddingHorizontal: 15,
+        height: 46,
+        borderRadius: 999,
         backgroundColor: p.input,
         borderWidth: StyleSheet.hairlineWidth,
         borderColor: focus ? p.primary : p.cardBorder,
       }}>
       <Icon name="search" size={18} color={p.faint} />
       <TextInput
-        style={{ flex: 1, paddingVertical: 11, fontSize: 15, color: p.text }}
+        style={{ flex: 1, paddingVertical: 8, fontSize: 15, color: p.text }}
         value={props.value}
         onChangeText={props.onChange}
         onFocus={() => setFocus(true)}
@@ -257,7 +308,7 @@ function ToolTile(props: { tool: ToolDef; index: number; onPress: () => void }) 
         opacity: a,
         transform: [{ translateY: a.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }],
       }}>
-      <Tap onPress={props.onPress} style={styles.tile}>
+      <Tap onPress={props.onPress} glow style={styles.tile}>
         <View
           style={{
             backgroundColor: p.card,
@@ -287,5 +338,5 @@ function ToolTile(props: { tool: ToolDef; index: number; onPress: () => void }) 
 
 const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  tile: { flex: 1 },
+  tile: { flex: 1, borderRadius: 18, overflow: 'hidden' },
 });

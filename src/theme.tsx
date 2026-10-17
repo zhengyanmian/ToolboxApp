@@ -56,7 +56,7 @@ export const lightPalette: Palette = {
   bgBottom: '#eaedf5',
   bgGlow: '#cfe0ff',
   header: 'rgba(252,253,255,0.86)',
-  card: 'rgba(255,255,255,0.86)',
+  card: 'rgba(255,255,255,0.72)',
   cardSolid: '#ffffff',
   cardBorder: 'rgba(15,23,42,0.06)',
   cardShadow: 'rgba(24,40,80,0.10)',
@@ -71,9 +71,9 @@ export const lightPalette: Palette = {
   ok: '#0eab6b',
   warn: '#e5484d',
   info: '#2f6bff',
-  chip: 'rgba(255,255,255,0.78)',
-  chipBorder: 'rgba(15,23,42,0.07)',
-  input: 'rgba(255,255,255,0.92)',
+  chip: 'rgba(15,23,42,0.045)',
+  chipBorder: 'rgba(15,23,42,0.055)',
+  input: 'rgba(15,23,42,0.04)',
   overlay: 'rgba(17,24,39,0.28)',
   glowA: '#7bb0ff',
   glowB: '#c4b5fd',
@@ -191,11 +191,10 @@ export function ThemeProvider(props: { children: React.ReactNode }) {
   const p = dark ? darkPalette : lightPalette;
   currentPalette = p;
 
-  /* 主题切换过渡：先用目标背景色铺满（淡入），在完全盖住时换色，再淡出。
-     这样切换不会「硬闪一下」，观感接近系统级的溶入过渡。 */
-  const fade = useRef(new Animated.Value(0)).current;
+  /* 主题切换过渡：内容整体快速「压暗一下」再恢复，在最低亮度那一刻完成换色。
+     不再铺一整屏纯色蒙版——那样看起来就是一张灰纸盖上来，用户反馈很丑。 */
+  const fade = useRef(new Animated.Value(1)).current;
   const busy = useRef(false);
-  const [veil, setVeil] = useState<Palette | null>(null);
 
   const persist = useCallback((m: Mode) => {
     setModeState(m);
@@ -212,25 +211,23 @@ export function ThemeProvider(props: { children: React.ReactNode }) {
         return;
       }
       busy.current = true;
-      setVeil(nextDark ? darkPalette : lightPalette);
       Animated.timing(fade, {
-        toValue: 1,
-        duration: 165,
-        easing: Easing.out(Easing.quad),
+        toValue: 0.12,
+        duration: 130,
+        easing: Easing.in(Easing.quad),
         useNativeDriver: true,
       }).start(() => {
         persist(m);
-        setTimeout(() => {
+        requestAnimationFrame(() => {
           Animated.timing(fade, {
-            toValue: 0,
-            duration: 235,
-            easing: Easing.in(Easing.quad),
+            toValue: 1,
+            duration: 210,
+            easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
           }).start(() => {
             busy.current = false;
-            setVeil(null);
           });
-        }, 40);
+        });
       });
     },
     [dark, persist, fade],
@@ -250,14 +247,16 @@ export function ThemeProvider(props: { children: React.ReactNode }) {
   return (
     <Ctx.Provider value={value}>
       <View style={{ flex: 1, backgroundColor: p.bg }}>
-        {props.children}
         <Animated.View
-          pointerEvents="none"
-          style={[
-            { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
-            { backgroundColor: (veil ?? p).bg, opacity: fade },
-          ]}
-        />
+          style={{
+            flex: 1,
+            opacity: fade,
+            transform: [
+              { scale: fade.interpolate({ inputRange: [0, 1], outputRange: [0.985, 1] }) },
+            ],
+          }}>
+          {props.children}
+        </Animated.View>
       </View>
     </Ctx.Provider>
   );

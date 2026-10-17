@@ -128,9 +128,12 @@ export function Glow(props: {
 }
 
 /* ------------------------------------------------------------------ */
-/* 玻璃质感层：ColorOS「凝光」材质                                      */
-/* 关键点：整块表面只用「一条连续渐变」+「一道 1px 顶边高光」，          */
-/* 不再用上下两个色块拼接——那样会在按钮正中间留下一条可见的分界线。     */
+/* 玻璃质感层                                                          */
+/* 规则（参考开源 glassmorphism 库的通行做法）：                        */
+/*  · 只用「白色 → 全透明」的单向柔光，绝不掺黑——掺黑会在下半部分糊出   */
+/*    一块脏影子，就是"上白下黑、又不像渐变"的根源；                     */
+/*  · 浅色模式下除主色按钮外一律不铺，否则卡片会被刷成纯白；             */
+/*  · 不画顶边高光线（在卡片上会变成一道可见的白边）。                   */
 /* ------------------------------------------------------------------ */
 let glassSeed = 0;
 
@@ -142,28 +145,18 @@ export function GlassLayer(props: { radius: number; tone?: GlassTone }) {
   const tone = props.tone ?? 'card';
   const dark = p.isDark;
 
-  let stops: [string, string, string];
-  if (tone === 'primary') {
-    stops = [
-      'rgba(255,255,255,0.30)',
-      'rgba(255,255,255,0.07)',
-      dark ? 'rgba(0,0,0,0.20)' : 'rgba(0,0,0,0.07)',
-    ];
-  } else if (tone === 'soft') {
-    stops = dark
-      ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.012)', 'rgba(0,0,0,0.07)']
-      : ['rgba(255,255,255,0.58)', 'rgba(255,255,255,0.14)', 'rgba(148,163,184,0.05)'];
-  } else if (tone === 'danger') {
-    stops = ['rgba(255,255,255,0.22)', 'rgba(255,255,255,0.05)', 'rgba(0,0,0,0.07)'];
-  } else if (tone === 'button') {
-    stops = dark
-      ? ['rgba(255,255,255,0.105)', 'rgba(255,255,255,0.028)', 'rgba(0,0,0,0.15)']
-      : ['rgba(255,255,255,0.94)', 'rgba(255,255,255,0.34)', 'rgba(203,213,225,0.20)'];
-  } else {
-    stops = dark
-      ? ['rgba(255,255,255,0.062)', 'rgba(255,255,255,0.014)', 'rgba(0,0,0,0.10)']
-      : ['rgba(255,255,255,0.88)', 'rgba(255,255,255,0.28)', 'rgba(203,213,225,0.14)'];
-  }
+  const top =
+    tone === 'primary'
+      ? dark
+        ? 0.18
+        : 0.12
+      : dark
+      ? tone === 'button'
+        ? 0.07
+        : 0.04
+      : 0;
+
+  if (top <= 0) return null;
 
   return (
     <View
@@ -172,31 +165,22 @@ export function GlassLayer(props: { radius: number; tone?: GlassTone }) {
       <Svg width="100%" height="100%">
         <Defs>
           <LinearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={stops[0]} />
-            <Stop offset="0.52" stopColor={stops[1]} />
-            <Stop offset="1" stopColor={stops[2]} />
+            <Stop offset="0" stopColor="#ffffff" stopOpacity={top} />
+            <Stop offset="0.42" stopColor="#ffffff" stopOpacity={top * 0.26} />
+            <Stop offset="1" stopColor="#ffffff" stopOpacity={0} />
           </LinearGradient>
         </Defs>
         <Rect x={0} y={0} width="100%" height="100%" fill={`url(#${id})`} />
       </Svg>
-      {/* 凝光的“聚光边”：只有一道发丝级高光，不产生色块 */}
-      <View
-        style={{
-          position: 'absolute',
-          left: '6%',
-          right: '6%',
-          top: 0,
-          height: StyleSheet.hairlineWidth * 2,
-          borderRadius: 1,
-          backgroundColor: dark ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.95)',
-        }}
-      />
     </View>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* 通用按压组件：弹性缩放反馈                                          */
+/* 通用按压组件：柔性反馈（挤压 + 惯性回弹）+「凝光」跟随手指            */
+/* ColorOS 17 的两个核心手感：                                          */
+/*   · 柔性反馈：按下时轻微挤压，松手用带 bounce 的 spring 回弹          */
+/*   · 凝光视效：一团柔光从按下的位置扩散，松手后缓慢消退               */
 /* ------------------------------------------------------------------ */
 export function Tap(props: {
   children: React.ReactNode;
@@ -206,20 +190,110 @@ export function Tap(props: {
   disabled?: boolean;
   scaleTo?: number;
   hitSlop?: number;
+  /** 需要外层已经 overflow:hidden（Btn / Chip / 圆钮 / 磁贴都是），否则光会溢出圆角 */
+  glow?: boolean;
+  glowColor?: string;
 }) {
+  const p = usePalette();
   const v = useRef(new Animated.Value(1)).current;
-  const to = (n: number) =>
-    Animated.spring(v, { toValue: n, useNativeDriver: true, speed: 40, bounciness: 0 }).start();
+  const g = useRef(new Animated.Value(0)).current;
+  const [pt, setPt] = useState<{ x: number; y: number; r: number } | null>(null);
+  const box = useRef({ w: 0, h: 0 });
+  const gid = useMemo(() => `ag${(glassSeed += 1)}`, []);
+  const wantGlow = props.glow === true;
+  const color = props.glowColor ?? (p.isDark ? '#ffffff' : '#8fb8ff');
+
+  const pressIn = (e: any) => {
+    if (wantGlow) {
+      const ne = e?.nativeEvent ?? {};
+      const bw = box.current.w || 0;
+      const bh = box.current.h || 0;
+      setPt({
+        x: ne.locationX ?? bw / 2,
+        y: ne.locationY ?? bh / 2,
+        r: Math.max(24, Math.max(bw, bh) * 0.8),
+      });
+      g.setValue(0);
+      Animated.timing(g, {
+        toValue: 1,
+        duration: 150,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }).start();
+    }
+    Animated.spring(v, {
+      toValue: props.scaleTo ?? 0.958,
+      useNativeDriver: true,
+      speed: 55,
+      bounciness: 0,
+    }).start();
+  };
+
+  const pressOut = () => {
+    if (wantGlow) {
+      Animated.timing(g, {
+        toValue: 0,
+        duration: 340,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        // 光晕消失后直接卸载，避免每个按过的按钮都长期挂着一个 SVG 节点
+        if (finished) setPt(null);
+      });
+    }
+    Animated.spring(v, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 15,
+      bounciness: 9,
+    }).start();
+  };
+
   return (
     <A_Press
       disabled={props.disabled}
       hitSlop={props.hitSlop}
       onPress={props.onPress}
       onLongPress={props.onLongPress}
-      onPressIn={() => to(props.scaleTo ?? 0.97)}
-      onPressOut={() => to(1)}
+      onPressIn={pressIn}
+      onPressOut={pressOut}
+      onLayout={
+        wantGlow
+          ? (e) => {
+              box.current = { w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height };
+            }
+          : undefined
+      }
       style={[props.style, { transform: [{ scale: v }] }, props.disabled ? { opacity: 0.45 } : null]}>
       {props.children}
+      {wantGlow && pt ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              opacity: g,
+              transform: [{ scale: g.interpolate({ inputRange: [0, 1], outputRange: [0.62, 1] }) }],
+            },
+          ]}>
+          <Svg width="100%" height="100%">
+            <Defs>
+              <RadialGradient
+                id={gid}
+                cx={pt.x}
+                cy={pt.y}
+                rx={pt.r}
+                ry={pt.r}
+                gradientUnits="userSpaceOnUse">
+                <Stop offset="0" stopColor={color} stopOpacity={p.isDark ? 0.22 : 0.45} />
+                <Stop offset="0.55" stopColor={color} stopOpacity={p.isDark ? 0.07 : 0.15} />
+                <Stop offset="1" stopColor={color} stopOpacity={0} />
+              </RadialGradient>
+            </Defs>
+            <Rect x={0} y={0} width="100%" height="100%" fill={`url(#${gid})`} />
+          </Svg>
+        </Animated.View>
+      ) : null}
     </A_Press>
   );
 }
@@ -259,7 +333,7 @@ export function Page(props: {
         <View
           style={{
             backgroundColor: p.primarySoft,
-            borderRadius: 16,
+            borderRadius: 18,
             padding: 13,
             marginBottom: 12,
             borderWidth: StyleSheet.hairlineWidth,
@@ -286,28 +360,35 @@ export function Page(props: {
             { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) },
           ],
         }}>
-        <View
-          style={{
-            paddingTop: insets.top + 6,
-            paddingBottom: 10,
-            paddingHorizontal: 8,
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: p.header,
-            borderBottomWidth: StyleSheet.hairlineWidth,
-            borderBottomColor: p.line,
-          }}>
-          {props.onBack ? (
-            <Tap onPress={props.onBack} style={s.back} hitSlop={10}>
-              <Icon name="chevron" size={21} color={p.text} strokeWidth={2.1} />
-            </Tap>
-          ) : (
-            <View style={s.back} />
-          )}
-          <Text style={{ flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '600', color: p.text }}>
-            {props.title}
-          </Text>
-          <View style={s.back}>{props.right}</View>
+        {/* 浮岛式导航栏：不贴边、不断线，一颗悬浮的玻璃胶囊 */}
+        <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 12 }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              height: 52,
+              borderRadius: 26,
+              paddingHorizontal: 4,
+              overflow: 'hidden',
+              backgroundColor: p.header,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: p.cardBorder,
+            }}>
+            <GlassLayer radius={26} tone="card" />
+            {props.onBack ? (
+              <Tap onPress={props.onBack} glow style={s.back} hitSlop={10}>
+                <Icon name="chevron" size={21} color={p.text} strokeWidth={2.1} />
+              </Tap>
+            ) : (
+              <View style={s.back} />
+            )}
+            <Text
+              numberOfLines={1}
+              style={{ flex: 1, textAlign: 'center', fontSize: 16.5, fontWeight: '600', color: p.text }}>
+              {props.title}
+            </Text>
+            <View style={s.back}>{props.right}</View>
+          </View>
         </View>
         {props.scroll === false ? (
           <View style={[{ flex: 1, padding: 14 }, props.contentStyle]}>{body}</View>
@@ -335,7 +416,7 @@ export function Card(props: {
   pad?: number;
 }) {
   const p = usePalette();
-  const radius = 22;
+  const radius = 26;
   const style = [
     {
       backgroundColor: p.card,
@@ -358,7 +439,7 @@ export function Card(props: {
   );
   if (props.onPress) {
     return (
-      <Tap onPress={props.onPress} style={style}>
+      <Tap onPress={props.onPress} glow style={style}>
         {inner}
       </Tap>
     );
@@ -429,6 +510,7 @@ export function Btn(props: {
     <Tap
       onPress={props.onPress}
       disabled={props.disabled}
+      glow
       style={[
         {
           flexGrow: props.fit ? 0 : 1,
@@ -469,6 +551,7 @@ export function Chip(props: {
   return (
     <Tap
       onPress={props.onPress}
+      glow
       style={[
         {
           flexDirection: 'row',
@@ -1243,6 +1326,7 @@ export function RoundButton(props: {
     <Tap
       onPress={props.onPress}
       onLongPress={props.onLongPress}
+      glow
       style={[
         {
           width: size,

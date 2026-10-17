@@ -191,9 +191,18 @@ export default function NoiseMeter({ onBack }: { onBack: () => void }) {
               <Text style={st.waveTitle}>最近 3 秒波形</Text>
               <View style={{ flex: 1 }} />
               <Text style={st.peak}>峰值 {peak > 0 ? peak.toFixed(1) : '--'} dB</Text>
-              {peak > 0 ? (
-                <Chip text="清零" icon="refresh" onPress={() => setPeak(0)} />
-              ) : null}
+              <Chip
+                text="重置"
+                icon="refresh"
+                onPress={() => {
+                  // 不只是峰值：读数、平滑值、波形历史一起清掉，重置后重新累积
+                  setPeak(0);
+                  setDb(null);
+                  setWave([]);
+                  hist.current = [];
+                  smooth.current = null;
+                }}
+              />
             </View>
             <View
               style={st.waveBox}
