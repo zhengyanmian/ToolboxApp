@@ -1,14 +1,17 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { Page, GlassLayer, Icon, Tap, dynStyles } from '../ui';
 import { usePalette } from '../theme';
+import { nativeVibrate } from '../native';
 import { create, all } from 'mathjs';
 
 const math = create(all);
 
 type Kind = 'num' | 'fn' | 'op' | 'eq';
+type KeyDef = { label: string; kind: Kind; act?: string };
 
-/** 只在本地求值：先替换成 mathjs 能懂的符号，再交给 mathjs */
+/** 只在本地求值：先换符号，再交给 mathjs */
 function evalExpr(src: string, angleMode: 'deg' | 'rad'): number {
   let s = src
     .replace(/×/g, '*')
@@ -18,7 +21,6 @@ function evalExpr(src: string, angleMode: 'deg' | 'rad'): number {
     .replace(/√/g, 'sqrt')
     .replace(/(\d+(?:\.\d+)?)\s*%/g, '($1/100)');
   if (angleMode === 'deg') {
-    // 角度制：把 sin/cos/tan 换成包装函数，避免 mathjs 默认弧度
     s = s.replace(/\b(sin|cos|tan)\(/g, '__deg_$1(');
     return normalize(
       math.evaluate(s, {
@@ -41,12 +43,9 @@ function normalize(v: any): number {
 function fmt(v: number): string {
   if (!isFinite(v)) return v > 0 ? '∞' : '-∞';
   const abs = Math.abs(v);
-  if (abs !== 0 && (abs >= 1e12 || abs < 1e-9)) return v.toExponential(6).replace(/e([+-])/, 'e$1');
-  const r = Math.round(v * 1e10) / 1e10;
-  return String(r);
+  if (abs !== 0 && (abs >= 1e12 || abs < 1e-9)) return v.toExponential(6);
+  return String(Math.round(v * 1e10) / 1e10);
 }
-
-type KeyDef = { label: string; kind: Kind; act?: string };
 
 const BASIC: KeyDef[][] = [
   [
@@ -102,6 +101,89 @@ const SCI: KeyDef[][] = [
   ],
 ];
 
+let keySeed = 0;
+
+/** 单个圆键：纯视觉层，不接触摸（触摸统一交给键盘容器判定） */
+function KeyFace(props: {
+  k: KeyDef;
+  size: number;
+  active: boolean;
+  pt: { x: number; y: number } | null;
+}) {
+  const p = usePalette();
+  const gid = useMemo(() => `kg${(keySeed += 1)}`, []);
+  const k = props.k;
+  const isEq = k.kind === 'eq';
+  const bg = isEq
+    ? '#a9a2e6'
+    : k.kind === 'op'
+    ? p.primarySoft
+    : k.kind === 'fn'
+    ? p.isDark
+      ? 'rgba(255,255,255,0.11)'
+      : 'rgba(15,23,42,0.055)'
+    : p.isDark
+    ? 'rgba(255,255,255,0.06)'
+    : 'rgba(15,23,42,0.035)';
+  const fg = isEq
+    ? '#ffffff'
+    : k.label === 'AC'
+    ? p.warn
+    : k.kind === 'op'
+    ? p.primary
+    : p.text;
+
+  return (
+    <View
+      pointerEvents="none"
+      style={[
+        st.key,
+        {
+          width: props.size,
+          height: props.size,
+          borderRadius: props.size / 2,
+          backgroundColor: bg,
+          transform: [{ scale: props.active ? 0.93 : 1 }],
+        },
+      ]}>
+      <GlassLayer radius={props.size / 2} tone={isEq ? 'primary' : 'button'} />
+      {props.active && props.pt ? (
+        <View
+          style={[StyleSheet.absoluteFill, { borderRadius: props.size / 2, overflow: 'hidden' }]}>
+          <Svg width={props.size} height={props.size}>
+            <Defs>
+              <RadialGradient
+                id={gid}
+                cx={props.pt.x}
+                cy={props.pt.y}
+                rx={props.size * 0.8}
+                ry={props.size * 0.8}
+                gradientUnits="userSpaceOnUse">
+                <Stop offset="0" stopColor="#ffffff" stopOpacity={0.42} />
+                <Stop offset="0.6" stopColor="#ffffff" stopOpacity={0.14} />
+                <Stop offset="1" stopColor="#ffffff" stopOpacity={0} />
+              </RadialGradient>
+            </Defs>
+            <Circle cx={props.pt.x} cy={props.pt.y} r={props.size * 0.8} fill={`url(#${gid})`} />
+          </Svg>
+        </View>
+      ) : null}
+      {k.label === 'del' ? (
+        <Icon name="close" size={Math.round(props.size * 0.28)} color={fg} strokeWidth={2} />
+      ) : (
+        <Text
+          style={{
+            fontSize: k.label.length > 2 ? props.size * 0.27 : props.size * 0.34,
+            fontWeight: k.kind === 'num' ? '500' : '600',
+            color: fg,
+          }}>
+          {k.label}
+        </Text>
+      )}
+    </View>
+  );
+}
+
 export default function Calculator({ onBack }: { onBack: () => void }) {
   const p = usePalette();
   const { width, height } = useWindowDimensions();
@@ -111,9 +193,13 @@ export default function Calculator({ onBack }: { onBack: () => void }) {
   const [sci, setSci] = useState(false);
   const [deg, setDeg] = useState<'deg' | 'rad'>('deg');
   const [showHis, setShowHis] = useState(false);
-  const lastTap = useRef(0);
+  const [hover, setHover] = useState<{ row: number; col: number; x: number; y: number } | null>(
+    null,
+  );
+  const hoverRef = useRef<typeof hover>(null);
+  hoverRef.current = hover;
+  const lastAc = useRef(0);
 
-  /** 实时预览：能算出来就显示，算不出来不打扰 */
   let preview = '';
   try {
     if (expr.trim() && !/[+\-×÷*/^(]$/.test(expr.trim())) preview = '= ' + fmt(evalExpr(expr, deg));
@@ -125,14 +211,11 @@ export default function Calculator({ onBack }: { onBack: () => void }) {
     const act = k.act ?? k.label;
     if (act === 'AC') {
       const now = Date.now();
-      if (now - lastTap.current < 320) {
-        setHistory([]);
-        lastTap.current = 0;
-      } else {
-        lastTap.current = now;
-      }
+      const dbl = now - lastAc.current < 320;
+      lastAc.current = now;
       setExpr('');
       setResult('');
+      if (dbl) setHistory([]);
       return;
     }
     if (act === 'DEL') {
@@ -148,16 +231,15 @@ export default function Calculator({ onBack }: { onBack: () => void }) {
         setHistory((h) => [`${expr} = ${out}`, ...h].slice(0, 40));
         setResult(out);
         setExpr(out);
-      } catch (e: any) {
+      } catch {
         setResult('表达式无效');
       }
       return;
     }
     setResult('');
     setExpr((s) => {
-      // 避免连续运算符
       if (k.kind === 'op' && /[+\-×÷*/^]$/.test(s) && s.length > 0) return s.slice(0, -1) + act;
-      if (act === '.' ) {
+      if (act === '.') {
         const tail = s.split(/[^0-9.]/).pop() ?? '';
         if (tail.includes('.')) return s;
         if (!tail) return s + '0.';
@@ -168,80 +250,43 @@ export default function Calculator({ onBack }: { onBack: () => void }) {
 
   const pad = 14;
   const gap = 8;
-  const cols = 4;
-  const rows = sci ? 9 : 5;
-  // 同时受「屏宽」和「屏高」约束：开了科学函数多出 4 行，圆键要自动缩小，否则会顶出屏幕
-  const byWidth = (width - pad * 2 - gap * (cols - 1)) / cols;
-  const byHeight = (height - 236 - gap * (rows - 1)) / rows;
+  const rowsAll = sci ? [...SCI, ...BASIC] : BASIC;
+  const rowCount = rowsAll.length;
+  const byWidth = (width - pad * 2 - gap * 3) / 4;
+  const byHeight = (height - 236 - gap * (rowCount - 1)) / rowCount;
   const keySize = Math.max(42, Math.min(78, byWidth, byHeight));
 
-  const renderKey = (k: KeyDef, i: number) => {
-    const isEq = k.kind === 'eq';
-    const bg = isEq
-      ? p.isDark
-        ? '#b3abe8'
-        : '#a9a2e6'
-      : k.kind === 'op'
-      ? p.primarySoft
-      : k.kind === 'fn'
-      ? p.isDark
-        ? 'rgba(255,255,255,0.11)'
-        : 'rgba(255,255,255,0.95)'
-      : p.isDark
-      ? 'rgba(255,255,255,0.055)'
-      : 'rgba(255,255,255,0.82)';
-    const fg = isEq
-      ? '#ffffff'
-      : k.label === 'AC'
-      ? p.warn
-      : k.kind === 'op'
-      ? p.primary
-      : p.text;
-    return (
-      <Tap
-        key={`${k.label}${i}`}
-        onPress={() => press(k)}
-        scaleTo={0.92}
-        style={[
-          st.key,
-          {
-            width: keySize,
-            height: keySize,
-            borderRadius: keySize / 2,
-            backgroundColor: bg,
-            borderWidth: k.kind === 'eq' ? 0 : StyleSheet.hairlineWidth,
-            borderColor: p.isDark ? 'rgba(255,255,255,0.055)' : 'rgba(15,23,42,0.045)',
-          },
-        ]}>
-        <GlassLayer radius={keySize / 2} tone={isEq ? 'primary' : 'button'} />
-        {k.label === 'del' ? (
-          <Icon name="close" size={20} color={fg} strokeWidth={2} />
-        ) : (
-          <Text
-            style={{
-              fontSize: k.label.length > 2 ? keySize * 0.27 : keySize * 0.34,
-              fontWeight: k.kind === 'num' ? '500' : '600',
-              color: fg,
-            }}>
-            {k.label}
-          </Text>
-        )}
-      </Tap>
-    );
+  /** 命中测试：触点换算成行列，落在间隙里返回 null */
+  const hitTest = (x: number, y: number) => {
+    const col = Math.floor((x - pad) / (keySize + gap));
+    const row = Math.floor(y / (keySize + gap));
+    if (col < 0 || col > 3 || row < 0 || row >= rowCount) return null;
+    const inX = x - pad - col * (keySize + gap);
+    const inY = y - row * (keySize + gap);
+    if (inX > keySize || inY > keySize) return null;
+    if (!rowsAll[row]?.[col]) return null;
+    return { row, col, x: inX, y: inY };
   };
 
-  const exprSize = expr.length > 26 ? 22 : expr.length > 16 ? 27 : 33;
-
   return (
-    <Page id="calculator" title="计算器" onBack={onBack} scroll={false} contentStyle={{ padding: 0 }}>
+    <Page
+      id="calculator"
+      title="计算器"
+      onBack={onBack}
+      scroll={false}
+      noDetail
+      contentStyle={{ padding: 0 }}>
       <View style={{ flex: 1 }}>
-        {/* 顶部小工具条 */}
         <View style={[st.toolbar, { paddingHorizontal: pad }]}>
           <Tap
             onPress={() => setSci((v) => !v)}
+            glow
             style={[
               st.tool,
-              { backgroundColor: sci ? p.primary : p.chip, borderColor: sci ? 'transparent' : p.chipBorder },
+              {
+                backgroundColor: sci ? p.primary : p.chip,
+                borderColor: sci ? 'transparent' : p.chipBorder,
+              },
             ]}>
             <Text style={{ fontSize: 13.5, fontWeight: '700', color: sci ? p.onPrimary : p.sub }}>
               √π
@@ -249,6 +294,7 @@ export default function Calculator({ onBack }: { onBack: () => void }) {
           </Tap>
           <Tap
             onPress={() => setDeg((d) => (d === 'deg' ? 'rad' : 'deg'))}
+            glow
             style={[st.tool, { backgroundColor: p.chip, borderColor: p.chipBorder }]}>
             <Text style={{ fontSize: 12.5, fontWeight: '700', color: p.sub }}>
               {deg === 'deg' ? 'DEG' : 'RAD'}
@@ -257,15 +303,18 @@ export default function Calculator({ onBack }: { onBack: () => void }) {
           <View style={{ flex: 1 }} />
           <Tap
             onPress={() => setShowHis((v) => !v)}
+            glow
             style={[
               st.tool,
-              { backgroundColor: showHis ? p.primary : p.chip, borderColor: showHis ? 'transparent' : p.chipBorder },
+              {
+                backgroundColor: showHis ? p.primary : p.chip,
+                borderColor: showHis ? 'transparent' : p.chipBorder,
+              },
             ]}>
             <Icon name="clock" size={17} color={showHis ? p.onPrimary : p.sub} />
           </Tap>
         </View>
 
-        {/* 显示区 */}
         <View style={[st.display, { paddingHorizontal: pad + 6 }]}>
           {showHis ? (
             <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
@@ -277,8 +326,7 @@ export default function Calculator({ onBack }: { onBack: () => void }) {
                     key={i}
                     selectable
                     onPress={() => {
-                      const v = h.split(' = ').pop() ?? '';
-                      setExpr(v);
+                      setExpr(h.split(' = ').pop() ?? '');
                       setShowHis(false);
                     }}
                     style={[st.hisItem, { color: p.sub }]}>
@@ -295,11 +343,10 @@ export default function Calculator({ onBack }: { onBack: () => void }) {
                 <Text
                   selectable
                   style={{
-                    fontSize: exprSize,
-                    fontWeight: '400',
+                    fontSize: expr.length > 26 ? 22 : expr.length > 16 ? 27 : 33,
                     color: expr ? p.text : p.faint,
                     textAlign: 'right',
-                    lineHeight: exprSize * 1.28,
+                    lineHeight: (expr.length > 26 ? 22 : expr.length > 16 ? 27 : 33) * 1.28,
                   }}>
                   {expr || '0'}
                 </Text>
@@ -314,24 +361,46 @@ export default function Calculator({ onBack }: { onBack: () => void }) {
                   marginTop: 6,
                   minHeight: 22,
                 }}>
-                {result ? (preview ? preview : result) : preview}
+                {result || preview}
               </Text>
             </>
           )}
         </View>
 
-        {/* 键盘 */}
-        <View style={{ paddingHorizontal: pad, paddingBottom: 16 }}>
-          {sci
-            ? SCI.map((row, ri) => (
-                <View key={`s${ri}`} style={[st.row, { gap, marginBottom: gap }]}>
-                  {row.map((k, i) => renderKey(k, i))}
-                </View>
-              ))
-            : null}
-          {BASIC.map((row, ri) => (
-            <View key={`b${ri}`} style={[st.row, { gap, marginBottom: ri === BASIC.length - 1 ? 0 : gap }]}>
-              {row.map((k, i) => renderKey(k, i))}
+        {/* 键盘：整块接管触摸——按下/滑过只给光效与震动，松手在哪个键上才输入 */}
+        <View
+          style={{ paddingHorizontal: pad, paddingBottom: 16 }}
+          onTouchStart={(e) => {
+            const h = hitTest(e.nativeEvent.locationX, e.nativeEvent.locationY);
+            setHover(h);
+            if (h) nativeVibrate('0,10');
+          }}
+          onTouchMove={(e) => {
+            const h = hitTest(e.nativeEvent.locationX, e.nativeEvent.locationY);
+            if (!h) return; // 划过间隙保持上一个键，手感更稳
+            const prev = hoverRef.current;
+            setHover(h);
+            if (!prev || prev.row !== h.row || prev.col !== h.col) nativeVibrate('0,8');
+          }}
+          onTouchEnd={() => {
+            const h = hoverRef.current;
+            setHover(null);
+            if (h) press(rowsAll[h.row][h.col]);
+          }}
+          onTouchCancel={() => setHover(null)}>
+          {rowsAll.map((row, ri) => (
+            <View
+              key={ri}
+              style={{ flexDirection: 'row', gap, marginBottom: ri === rowCount - 1 ? 0 : gap }}>
+              {row.map((k, ci) => (
+                <KeyFace
+                  key={`${ri}-${ci}`}
+                  k={k}
+                  size={keySize}
+                  active={hover?.row === ri && hover?.col === ci}
+                  pt={hover?.row === ri && hover?.col === ci ? { x: hover.x, y: hover.y } : null}
+                />
+              ))}
             </View>
           ))}
         </View>
@@ -342,7 +411,13 @@ export default function Calculator({ onBack }: { onBack: () => void }) {
 
 const st = dynStyles(() =>
   StyleSheet.create({
-    toolbar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 6, paddingBottom: 4 },
+    toolbar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingTop: 6,
+      paddingBottom: 4,
+    },
     tool: {
       height: 34,
       minWidth: 44,
@@ -351,11 +426,11 @@ const st = dynStyles(() =>
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: StyleSheet.hairlineWidth,
+      overflow: 'hidden',
     },
     display: { flex: 1, justifyContent: 'flex-end', paddingBottom: 10 },
     hisEmpty: { fontSize: 13, paddingTop: 10 },
     hisItem: { fontSize: 14, paddingVertical: 7, textAlign: 'right' },
-    row: { flexDirection: 'row', justifyContent: 'space-between' },
     key: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   }),
 );

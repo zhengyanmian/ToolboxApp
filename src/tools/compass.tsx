@@ -19,7 +19,7 @@ export default function Compass({ onBack }: { onBack: () => void }) {
   const lastRaw = useRef<number | null>(null);
 
   useEffect(() => {
-    const stop = startCompass(100, (v) => {
+    const stop = startCompass(60, (v) => {
       if (v.error) {
         setErr(
           v.error === 'no-sensor'

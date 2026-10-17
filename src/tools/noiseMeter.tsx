@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
-import { Page, Card, Btn, Chip, Icon, dynStyles } from '../ui';
+import { Page, Card, Btn, Icon, dynStyles } from '../ui';
 import { usePalette } from '../theme';
 import { startNoise, getNoiseAmplitude, stopNoise } from '../native';
 
@@ -191,18 +191,7 @@ export default function NoiseMeter({ onBack }: { onBack: () => void }) {
               <Text style={st.waveTitle}>最近 3 秒波形</Text>
               <View style={{ flex: 1 }} />
               <Text style={st.peak}>峰值 {peak > 0 ? peak.toFixed(1) : '--'} dB</Text>
-              <Chip
-                text="重置"
-                icon="refresh"
-                onPress={() => {
-                  // 不只是峰值：读数、平滑值、波形历史一起清掉，重置后重新累积
-                  setPeak(0);
-                  setDb(null);
-                  setWave([]);
-                  hist.current = [];
-                  smooth.current = null;
-                }}
-              />
+
             </View>
             <View
               style={st.waveBox}

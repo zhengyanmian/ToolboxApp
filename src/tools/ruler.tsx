@@ -3,6 +3,7 @@ import {
   Modal,
   PanResponder,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -23,6 +24,7 @@ import {
   dynStyles,
 } from '../ui';
 import type { IconName } from '../icons';
+import { setOrientation } from '../native';
 import { usePalette } from '../theme';
 
 /** Android 标准换算：1dp = 1/160 英寸 → 1cm = 37.795dp */
@@ -41,7 +43,8 @@ const KNOWN = [
 export default function Ruler({ onBack }: { onBack: () => void }) {
   const p = usePalette();
 
-  const [vertical, setVertical] = useState(false);
+  /** 固定横屏、刻度贴屏幕长边 */
+  const vertical = false;
   const [cms, setCms] = useState(15);
   const [k, setK] = useState(1);
   const [cursor, setCursor] = useState(0);
@@ -49,6 +52,12 @@ export default function Ruler({ onBack }: { onBack: () => void }) {
   const [sheet, setSheet] = useState(false);
   const [knownIdx, setKnownIdx] = useState(1);
   const [mmText, setMmText] = useState('85.6');
+
+  // 尺子必须贴着屏幕长边量东西：进入即锁横屏，离开恢复
+  useEffect(() => {
+    setOrientation('landscape');
+    return () => setOrientation('auto');
+  }, []);
 
   useEffect(() => {
     AsyncStorage.getItem(SCALE_KEY)
@@ -122,7 +131,6 @@ export default function Ruler({ onBack }: { onBack: () => void }) {
       <View style={st.root}>
         {/* 工具条 */}
         <View style={st.toolbar}>
-          <GBtn name="swap" onPress={() => setVertical((v) => !v)} />
           <GBtn name="minus" disabled={cms <= 5} onPress={() => setCms((c) => Math.max(5, c - 5))} />
           <Text style={[st.len, { color: p.text }]}>{cms} cm</Text>
           <GBtn name="plus" disabled={cms >= 40} onPress={() => setCms((c) => Math.min(40, c + 5))} />
@@ -131,97 +139,64 @@ export default function Ruler({ onBack }: { onBack: () => void }) {
         </View>
 
         {/* 尺身：贴着屏幕的一条边，0 刻度就在边缘上 */}
-        {vertical ? (
-          <View style={st.stageRow}>
+        <>
+          <View
+            style={[
+              st.stripH,
+              { height: stripH, backgroundColor: p.cardSolid, borderColor: p.line },
+            ]}
+            onLayout={(e) =>
+              setArea({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })
+            }
+            {...pan.panHandlers}>
+            <GlassLayer radius={0} tone="card" />
+            {ticks.map((t) => {
+              const size = t.major ? 26 : t.mid ? 16 : 9;
+              return (
+                <React.Fragment key={t.mm}>
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      position: 'absolute',
+                      left: t.pos,
+                      top: 0,
+                      width: 1,
+                      height: size,
+                      backgroundColor: t.major ? p.text : t.mid ? p.sub : p.faint,
+                    }}
+                  />
+                  {t.major ? (
+                    <Text style={[st.numH, { left: t.pos + 2, color: p.sub }]}>{t.mm / 10}</Text>
+                  ) : null}
+                </React.Fragment>
+              );
+            })}
             <View
-              style={[st.stripV, { width: stripH, backgroundColor: p.cardSolid, borderColor: p.line }]}
-              onLayout={(e) =>
-                setArea({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })
-              }
-              {...pan.panHandlers}>
-              <GlassLayer radius={0} tone="card" />
-              {ticks.map((t) => {
-                const size = t.major ? 26 : t.mid ? 16 : 9;
-                return (
-                  <React.Fragment key={t.mm}>
-                    <View
-                      pointerEvents="none"
-                      style={{
-                        position: 'absolute',
-                        top: t.pos,
-                        left: 0,
-                        width: size,
-                        height: 1,
-                        backgroundColor: t.major ? p.text : t.mid ? p.sub : p.faint,
-                      }}
-                    />
-                    {t.major ? (
-                      <Text style={[st.numV, { top: t.pos + 2, color: p.sub }]}>{t.mm / 10}</Text>
-                    ) : null}
-                  </React.Fragment>
-                );
-              })}
-              <View
-                pointerEvents="none"
-                style={[st.curV, { top: cursorPos, backgroundColor: p.primary }]}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <InfoPanel k={k} cms={cms} totalMm={totalMm} cursorMm={cursorMm} onCalib={() => setSheet(true)} />
+              pointerEvents="none"
+              style={[st.curH, { left: cursorPos, backgroundColor: p.primary }]}
+            />
+            <View
+              pointerEvents="none"
+              style={[
+                st.cursorTag,
+                {
+                  left: Math.max(4, Math.min(Math.max(4, len - 62), cursorPos - 30)),
+                  backgroundColor: p.primary,
+                },
+              ]}>
+              <Text style={st.cursorTxt}>{cursorMm.toFixed(1)} mm</Text>
             </View>
           </View>
-        ) : (
-          <>
-            <View
-              style={[
-                st.stripH,
-                { height: stripH, backgroundColor: p.cardSolid, borderColor: p.line },
-              ]}
-              onLayout={(e) =>
-                setArea({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })
-              }
-              {...pan.panHandlers}>
-              <GlassLayer radius={0} tone="card" />
-              {ticks.map((t) => {
-                const size = t.major ? 26 : t.mid ? 16 : 9;
-                return (
-                  <React.Fragment key={t.mm}>
-                    <View
-                      pointerEvents="none"
-                      style={{
-                        position: 'absolute',
-                        left: t.pos,
-                        top: 0,
-                        width: 1,
-                        height: size,
-                        backgroundColor: t.major ? p.text : t.mid ? p.sub : p.faint,
-                      }}
-                    />
-                    {t.major ? (
-                      <Text style={[st.numH, { left: t.pos + 2, color: p.sub }]}>{t.mm / 10}</Text>
-                    ) : null}
-                  </React.Fragment>
-                );
-              })}
-              <View
-                pointerEvents="none"
-                style={[st.curH, { left: cursorPos, backgroundColor: p.primary }]}
-              />
-              <View
-                pointerEvents="none"
-                style={[
-                  st.cursorTag,
-                  {
-                    left: Math.max(4, Math.min(Math.max(4, len - 62), cursorPos - 30)),
-                    backgroundColor: p.primary,
-                  },
-                ]}>
-                <Text style={st.cursorTxt}>{cursorMm.toFixed(1)} mm</Text>
-              </View>
-            </View>
-            <InfoPanel k={k} cms={cms} totalMm={totalMm} cursorMm={cursorMm} onCalib={() => setSheet(true)} />
-          </>
-        )}
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 90 }}>
+            <InfoPanel
+              k={k}
+              cms={cms}
+              totalMm={totalMm}
+              cursorMm={cursorMm}
+              onCalib={() => setSheet(true)}
+            />
+          </ScrollView>
+        </>
 
         {/* 校准入口：右下角一颗按钮 */}
         <Tap

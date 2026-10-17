@@ -8,7 +8,7 @@ import React, {
   useState,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Animated, Appearance, Easing, StyleSheet, View } from 'react-native';
+import { Animated, Appearance, Dimensions, Easing, View } from 'react-native';
 
 /**
  * 设计系统：双主题调色板（亮色 / 暗色）。
@@ -51,12 +51,12 @@ export type Palette = {
 export const lightPalette: Palette = {
   name: 'light',
   isDark: false,
-  bg: '#f1f3f8',
-  bgTop: '#fbfcff',
-  bgBottom: '#eaedf5',
+  bg: '#f2f3f5',
+  bgTop: '#f7f8fa',
+  bgBottom: '#eef0f3',
   bgGlow: '#cfe0ff',
   header: 'rgba(252,253,255,0.86)',
-  card: 'rgba(255,255,255,0.72)',
+  card: 'rgba(255,255,255,0.92)',
   cardSolid: '#ffffff',
   cardBorder: 'rgba(15,23,42,0.06)',
   cardShadow: 'rgba(24,40,80,0.10)',
@@ -83,13 +83,13 @@ export const lightPalette: Palette = {
 export const darkPalette: Palette = {
   name: 'dark',
   isDark: true,
-  bg: '#080b11',
-  bgTop: '#0d1219',
-  bgBottom: '#05070b',
+  bg: '#000000',
+  bgTop: '#050505',
+  bgBottom: '#000000',
   bgGlow: '#1c3358',
   header: 'rgba(10,14,20,0.80)',
   card: 'rgba(255,255,255,0.05)',
-  cardSolid: '#141a24',
+  cardSolid: '#141416',
   cardBorder: 'rgba(255,255,255,0.07)',
   cardShadow: 'rgba(0,0,0,0.5)',
   text: '#eef2f8',
@@ -159,7 +159,8 @@ type ThemeCtx = {
   p: Palette;
   mode: Mode;
   isDark: boolean;
-  setMode: (m: Mode) => void;
+  /** origin：过渡光圈的起点（页面坐标），传进来就从这个点扩开 */
+  setMode: (m: Mode, origin?: { x: number; y: number }) => void;
   toggle: () => void;
 };
 
@@ -191,10 +192,14 @@ export function ThemeProvider(props: { children: React.ReactNode }) {
   const p = dark ? darkPalette : lightPalette;
   currentPalette = p;
 
-  /* 主题切换过渡：内容整体快速「压暗一下」再恢复，在最低亮度那一刻完成换色。
-     不再铺一整屏纯色蒙版——那样看起来就是一张灰纸盖上来，用户反馈很丑。 */
-  const fade = useRef(new Animated.Value(1)).current;
+  /* 主题切换过渡：从触发点扩开一个「新底色」的圆，盖满整屏的同一帧完成换色，
+     用户看到的是从一个角向外铺开，而不是整屏闪一下。 */
+  const grow = useRef(new Animated.Value(0)).current;
   const busy = useRef(false);
+  const [reveal, setReveal] = useState<{ bg: string; x: number; y: number; d: number } | null>(
+    null,
+  );
+  const BASE = 240;
 
   const persist = useCallback((m: Mode) => {
     setModeState(m);
@@ -202,7 +207,7 @@ export function ThemeProvider(props: { children: React.ReactNode }) {
   }, []);
 
   const setMode = useCallback(
-    (m: Mode) => {
+    (m: Mode, origin?: { x: number; y: number }) => {
       if (busy.current) return;
       const nextDark =
         m === 'dark' || (m === 'system' && (Appearance.getColorScheme() ?? 'light') === 'dark');
@@ -211,26 +216,31 @@ export function ThemeProvider(props: { children: React.ReactNode }) {
         return;
       }
       busy.current = true;
-      Animated.timing(fade, {
-        toValue: 0.12,
-        duration: 130,
-        easing: Easing.in(Easing.quad),
-        useNativeDriver: true,
-      }).start(() => {
-        persist(m);
-        requestAnimationFrame(() => {
-          Animated.timing(fade, {
-            toValue: 1,
-            duration: 210,
-            easing: Easing.out(Easing.cubic),
-            useNativeDriver: true,
-          }).start(() => {
+      const { width, height } = Dimensions.get('window');
+      const x = origin?.x ?? width / 2;
+      const y = origin?.y ?? height / 2;
+      const far = Math.hypot(Math.max(x, width - x), Math.max(y, height - y));
+      const d = far * 2 + 28;
+      setReveal({ bg: (nextDark ? darkPalette : lightPalette).bg, x, y, d });
+      grow.setValue(0);
+      requestAnimationFrame(() => {
+        Animated.timing(grow, {
+          toValue: 1,
+          duration: 430,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }).start(({ finished }) => {
+          if (!finished) {
             busy.current = false;
-          });
+            return;
+          }
+          persist(m); // 光圈已经盖满，换色发生在看不见的地方
+          setReveal(null); // 同一帧撤掉光圈
+          busy.current = false;
         });
       });
     },
-    [dark, persist, fade],
+    [dark, persist, grow],
   );
 
   const value = useMemo<ThemeCtx>(
@@ -247,16 +257,24 @@ export function ThemeProvider(props: { children: React.ReactNode }) {
   return (
     <Ctx.Provider value={value}>
       <View style={{ flex: 1, backgroundColor: p.bg }}>
-        <Animated.View
-          style={{
-            flex: 1,
-            opacity: fade,
-            transform: [
-              { scale: fade.interpolate({ inputRange: [0, 1], outputRange: [0.985, 1] }) },
-            ],
-          }}>
-          {props.children}
-        </Animated.View>
+        {props.children}
+        {reveal ? (
+          <Animated.View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: reveal.x - BASE / 2,
+              top: reveal.y - BASE / 2,
+              width: BASE,
+              height: BASE,
+              borderRadius: BASE / 2,
+              backgroundColor: reveal.bg,
+              transform: [
+                { scale: grow.interpolate({ inputRange: [0, 1], outputRange: [0, reveal.d / BASE] }) },
+              ],
+            }}
+          />
+        ) : null}
       </View>
     </Ctx.Provider>
   );

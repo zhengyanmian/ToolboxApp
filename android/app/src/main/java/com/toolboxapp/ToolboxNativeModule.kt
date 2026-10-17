@@ -231,7 +231,20 @@ class ToolboxNativeModule(private val reactContext: ReactApplicationContext) :
     val r = FloatArray(9)
     val i = FloatArray(9)
     val ok = SensorManager.getRotationMatrix(r, i, accVals, magVals)
-    if (!ok) return
+    if (!ok) {
+      // 磁力计先到、加速度计还没到时，先按「手机大致水平」给一个近似航向。
+      // 不这样做的话，打开指南针要等两个传感器都出数，真机上会出现几秒空白。
+      val mx = magVals[0].toDouble()
+      val my = magVals[1].toDouble()
+      if (mx == 0.0 && my == 0.0) return
+      var approx = Math.toDegrees(atan2(-mx, my))
+      if (approx < 0) approx += 360.0
+      val p0 = Arguments.createMap()
+      p0.putDouble("heading", approx)
+      p0.putBoolean("exact", false)
+      emit("CompassUpdate", p0)
+      return
+    }
     val o = FloatArray(3)
     SensorManager.getOrientation(r, o)
     var heading = Math.toDegrees(o[0].toDouble())
@@ -240,6 +253,7 @@ class ToolboxNativeModule(private val reactContext: ReactApplicationContext) :
     p.putDouble("heading", heading)
     p.putDouble("pitch", Math.toDegrees(o[1].toDouble()))
     p.putDouble("roll", Math.toDegrees(o[2].toDouble()))
+    p.putBoolean("exact", true)
     emit("CompassUpdate", p)
   }
 

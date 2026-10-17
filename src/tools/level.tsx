@@ -5,7 +5,7 @@ import { Page, Card, Btn, dynStyles } from '../ui';
 import { usePalette } from '../theme';
 import { startAccelerometer, nativeVibrate } from '../native';
 
-const FLAT_DEG = 1.5;
+const FLAT_DEG = 1.2;
 const MAX_DEG = 30;
 
 function adviceOf(hx: number, hy: number, flat: boolean): string {
@@ -71,8 +71,13 @@ export default function Level({ onBack }: { onBack: () => void }) {
     return stop;
   }, []);
 
-  const hx = tilt.x - zero.x;
-  const hy = tilt.y - zero.y;
+  // 加速度计存在零点漂移，手机平放也会读到 1° 左右的常值偏差。
+  // 用「软死区」把它吃掉：±1.2° 内直接归零，气泡才会真正落在中心靶环上；
+  // 用减法而不是硬截断，越过死区时不会突然跳一下。
+  const DEAD = 1.2;
+  const soft = (v: number) => (Math.abs(v) <= DEAD ? 0 : v - Math.sign(v) * DEAD);
+  const hx = soft(tilt.x - zero.x);
+  const hy = soft(tilt.y - zero.y);
   const calced = Math.abs(zero.x) > 0.001 || Math.abs(zero.y) > 0.001;
 
   const board = Math.max(206, Math.min(298, width - 92));
@@ -159,13 +164,6 @@ export default function Level({ onBack }: { onBack: () => void }) {
               r={bubbleR}
               fill={tilt.flat ? p.ok : p.primary}
               opacity={0.92}
-            />
-            <Circle
-              cx={cx + dx - bubbleR * 0.28}
-              cy={cx + dy - bubbleR * 0.28}
-              r={bubbleR * 0.3}
-              fill={p.onPrimary}
-              opacity={0.45}
             />
           </Svg>
         </View>

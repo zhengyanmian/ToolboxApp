@@ -1,46 +1,25 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
-import {
-  Btn,
-  Card,
-  Icon,
-  Loading,
-  Page,
-  Row,
-  SectionTitle,
-  Segmented,
-  Slider,
-  Tap,
-  dynStyles,
-} from '../ui';
+import { Btn, Card, Chip, Icon, Page, Segmented, Slider, Tap, dynStyles } from '../ui';
 import { usePalette } from '../theme';
 import { RawImage, bytesToBase64, decodeImage, readImageBytes, savePngToGallery } from '../lib/imgio';
 import { encodePng } from '../lib/png';
 
-type Mode = 'composed' | 'revealDisplay' | 'revealHidden';
-/** 同一尺寸下的三张图：合成图 / 显示图 / 隐藏图 */
-type ImageSet = { out: RawImage; d: RawImage; h: RawImage };
+/** 处理边长：光棱坦克本质是噪点，640 足够，再大手机算不动 */
+const MAX_SIDE = 640;
+const MAX_BYTES = 40 * 1024 * 1024;
 
-const MAX_SIDE = 1100; // 限制合成尺寸，保证手机端运算速度
-const PREVIEW_SIDE = 900; // 预览缩略图最大边
-const MAX_BYTES = 40 * 1024 * 1024; // 单张图片文件上限
-const MAX_PIXELS = 24_000_000; // 解码后像素上限，防止内存不足
+type PixelMode = 'standard' | 'average';
 
-const MODES: { label: string; value: Mode }[] = [
-  { label: '合成图', value: 'composed' },
-  { label: '还原显示图', value: 'revealDisplay' },
-  { label: '还原隐藏图', value: 'revealHidden' },
-];
+const clamp255 = (v: number) => (v < 0 ? 0 : v > 255 ? 255 : v);
 
-const MODE_HINT: Record<Mode, string> = {
-  composed: '合成图直接看就是「显示图」。把下方压暗强度调大，隐藏图会逐渐浮现。',
-  revealDisplay: '按 out² ÷ 隐藏图 反解，应当还原出原始显示图。',
-  revealHidden: '按 out² ÷ 显示图 反解，应当还原出原始隐藏图。',
-};
-
-/** 最近邻采样到指定尺寸 */
-function sampleTo(src: RawImage, w: number, h: number): RawImage {
+/** 最近邻缩放到最大边不超过 max */
+function fitMax(src: RawImage, max: number): RawImage {
+  const scale = Math.min(1, max / Math.max(src.width, src.height));
+  if (scale >= 1) return src;
+  const w = Math.max(1, Math.round(src.width * scale));
+  const h = Math.max(1, Math.round(src.height * scale));
   const out = new Uint8Array(w * h * 4);
   for (let y = 0; y < h; y++) {
     const sy = Math.min(src.height - 1, Math.floor((y / h) * src.height));
@@ -57,375 +36,324 @@ function sampleTo(src: RawImage, w: number, h: number): RawImage {
   return { width: w, height: h, data: out };
 }
 
-/** 限制最大边 */
-function fitDims(w: number, h: number): [number, number] {
-  const scale = Math.min(1, MAX_SIDE / Math.max(w, h));
-  return [Math.max(1, Math.round(w * scale)), Math.max(1, Math.round(h * scale))];
-}
-
-/** 缩略：最大边不超过 maxSide，否则最近邻采样 */
-function downscaleTo(src: RawImage, maxSide: number): RawImage {
-  const scale = Math.min(1, maxSide / Math.max(src.width, src.height));
-  if (scale >= 1) return src;
-  return sampleTo(src, Math.max(1, Math.round(src.width * scale)), Math.max(1, Math.round(src.height * scale)));
-}
-
-/** 合成：out = √(显示图 × 隐藏图) */
-function compose(d: RawImage, h: RawImage): RawImage {
-  const n = d.data.length;
-  const out = new Uint8Array(n);
-  for (let i = 0; i < n; i += 4) {
-    for (let c = 0; c < 3; c++) {
-      const dv = d.data[i + c] / 255;
-      const hv = h.data[i + c] / 255;
-      out[i + c] = Math.round(Math.sqrt(dv * hv) * 255);
+/** 3×3 均值（重复调用 = 多次扩散，让画面更「散」、远看更清楚） */
+function blur3(src: any, w: number, h: number): any {
+  const out = new Float32Array(src.length);
+  for (let y = 0; y < h; y++) {
+    const y0 = y > 0 ? y - 1 : 0;
+    const y1 = y < h - 1 ? y + 1 : h - 1;
+    for (let x = 0; x < w; x++) {
+      const x0 = x > 0 ? x - 1 : 0;
+      const x1 = x < w - 1 ? x + 1 : w - 1;
+      const sum =
+        src[y0 * w + x0] + src[y0 * w + x] + src[y0 * w + x1] +
+        src[y * w + x0] + src[y * w + x] + src[y * w + x1] +
+        src[y1 * w + x0] + src[y1 * w + x] + src[y1 * w + x1];
+      out[y * w + x] = sum / 9;
     }
-    out[i + 3] = 255;
   }
-  return { width: d.width, height: d.height, data: out };
+  return out;
 }
 
-/** 反解：out² ÷ 已知图 = 未知图 */
-function divide(out: RawImage, known: RawImage): RawImage {
-  const n = out.data.length;
-  const res = new Uint8Array(n);
-  for (let i = 0; i < n; i += 4) {
-    for (let c = 0; c < 3; c++) {
-      const oN = out.data[i + c] / 255;
-      const kN = Math.max(0.02, known.data[i + c] / 255);
-      res[i + c] = Math.max(0, Math.min(255, Math.round(((oN * oN) / kN) * 255)));
+/**
+ * 光棱坦克生成：
+ *  1) 按对比度拉开明暗
+ *  2) 扩散：重复 3×3 均值，次数越多越「散」，远看反而越清楚
+ *  3) 抖动：Floyd–Steinberg 误差扩散把每个通道压成纯黑/纯亮，
+ *     近看是噪点，缩小或退远看则还原出原图的明暗与颜色
+ */
+function makePrism(
+  src: RawImage,
+  o: { threshold: number; contrast: number; mode: PixelMode; iterations: number },
+): RawImage {
+  const w = src.width;
+  const h = src.height;
+  const n = w * h;
+  const r = new Float32Array(n);
+  const g = new Float32Array(n);
+  const b = new Float32Array(n);
+
+  for (let i = 0, j = 0; i < n; i++, j += 4) {
+    r[i] = clamp255((src.data[j] - 128) * o.contrast + 128);
+    g[i] = clamp255((src.data[j + 1] - 128) * o.contrast + 128);
+    b[i] = clamp255((src.data[j + 2] - 128) * o.contrast + 128);
+  }
+
+  let sr: any = r;
+  let sg: any = g;
+  let sb: any = b;
+  for (let k = 0; k < o.iterations; k++) {
+    sr = blur3(sr, w, h);
+    sg = blur3(sg, w, h);
+    sb = blur3(sb, w, h);
+  }
+
+  // 「临近平均」：阈值取局部平均，明暗过渡更柔；否则用固定阈值
+  const ar = o.mode === 'average' ? blur3(r, w, h) : null;
+  const ag = o.mode === 'average' ? blur3(g, w, h) : null;
+  const ab = o.mode === 'average' ? blur3(b, w, h) : null;
+
+  const out = new Uint8Array(n * 4);
+  const T = o.threshold;
+
+  const dither = (buf: any, thr: any, ch: number) => {
+    const err = new Float32Array(n);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        const v = buf[i] + err[i];
+        const t = thr ? thr[i] : T;
+        const q = v >= t ? 255 : 0;
+        const e = v - q;
+        if (x + 1 < w) err[i + 1] += (e * 7) / 16;
+        if (y + 1 < h) {
+          if (x > 0) err[i + w - 1] += (e * 3) / 16;
+          err[i + w] += (e * 5) / 16;
+          if (x + 1 < w) err[i + w + 1] += (e * 1) / 16;
+        }
+        out[i * 4 + ch] = q;
+      }
     }
-    res[i + 3] = 255;
-  }
-  return { width: out.width, height: out.height, data: res };
-}
+  };
 
-/** gamma 压暗：v = pow(v, k)，k>1 变暗 */
-function gamma(img: RawImage, k: number): RawImage {
-  const lut = new Uint8Array(256);
-  for (let i = 0; i < 256; i++) lut[i] = Math.round(Math.pow(i / 255, k) * 255);
-  const n = img.data.length;
-  const out = new Uint8Array(n);
-  for (let i = 0; i < n; i += 4) {
-    out[i] = lut[img.data[i]];
-    out[i + 1] = lut[img.data[i + 1]];
-    out[i + 2] = lut[img.data[i + 2]];
-    out[i + 3] = 255;
-  }
-  return { width: img.width, height: img.height, data: out };
-}
+  dither(sr, ar, 0);
+  dither(sg, ag, 1);
+  dither(sb, ab, 2);
+  for (let i = 0; i < n; i++) out[i * 4 + 3] = 255;
 
-/** 按模式取图，并叠加压暗强度（0-100） */
-function renderMode(mode: Mode, set: ImageSet, dark: number): RawImage {
-  let img: RawImage;
-  if (mode === 'composed') img = set.out;
-  else if (mode === 'revealDisplay') img = divide(set.out, set.h);
-  else img = divide(set.out, set.d);
-  return dark > 0 ? gamma(img, 1 + (dark / 100) * 2.6) : img;
-}
-
-async function encodePreview(img: RawImage): Promise<string> {
-  return 'data:image/png;base64,' + bytesToBase64(encodePng(img));
-}
-
-/** 把底层异常转成可读提示 */
-function readable(e: any): string {
-  const m = String(e?.message || e || '');
-  if (/JPG \/ PNG/.test(m)) return '仅支持 JPG / PNG 图片，请重新选择';
-  if (/memory|allocation|out of/i.test(m)) return '内存不足，请选择尺寸更小的图片';
-  if (/分辨率|过大/.test(m)) return m;
-  return m || '处理失败，请重试';
+  return { width: w, height: h, data: out };
 }
 
 export default function PrismTank({ onBack }: { onBack: () => void }) {
   const p = usePalette();
 
-  const [dispUri, setDispUri] = useState<string | null>(null);
-  const [hideUri, setHideUri] = useState<string | null>(null);
-  const [dispName, setDispName] = useState('');
-  const [hideName, setHideName] = useState('');
-
-  const [full, setFull] = useState<ImageSet | null>(null); // 原始合成尺寸，用于保存
-  const [thumb, setThumb] = useState<ImageSet | null>(null); // 缩略图，用于预览
-  const [mode, setMode] = useState<Mode>('composed');
-  const [dark, setDark] = useState(0);
-
-  const [previewUri, setPreviewUri] = useState<string | null>(null);
-  const [gen, setGen] = useState(false);
-  const [busy, setBusy] = useState('');
+  const [src, setSrc] = useState<RawImage | null>(null);
+  const [preview, setPreview] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState('');
   const [err, setErr] = useState('');
-  const [saved, setSaved] = useState(false);
+  const [threshold, setThreshold] = useState(128);
+  const [contrast, setContrast] = useState(1);
+  const [mode, setMode] = useState<PixelMode>('standard');
+  const [iterations, setIterations] = useState(1);
+  const [saved, setSaved] = useState('');
+  const [outImg, setOutImg] = useState<RawImage | null>(null);
 
-  const genRef = useRef(0);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const seq = useRef(0);
 
-  // 预览生成（防抖 + 过期令牌），只作用于缩略图，保证拖动滑块流畅
+  /** 参数变化后延迟重算，拖动滑杆时不会卡 */
   useEffect(() => {
-    if (!thumb) {
-      setPreviewUri(null);
-      return;
-    }
-    const token = ++genRef.current;
-    setGen(true);
-    const tid = setTimeout(() => {
-      let task: Promise<string>;
+    if (!src) return;
+    if (timer.current) clearTimeout(timer.current);
+    const id = ++seq.current;
+    timer.current = setTimeout(() => {
       try {
-        task = encodePreview(renderMode(mode, thumb, dark));
+        setBusy(true);
+        setStage('正在生成…');
+        const out = makePrism(src, { threshold, contrast, mode, iterations });
+        if (id !== seq.current) return;
+        setOutImg(out);
+        const b64 = bytesToBase64(encodePng(out));
+        setPreview('data:image/png;base64,' + b64);
+        setErr('');
       } catch (e: any) {
-        setErr('预览生成失败：' + readable(e));
-        setGen(false);
+        setErr(e?.message || '生成失败');
+      } finally {
+        setBusy(false);
+        setStage('');
+      }
+    }, 180);
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, [src, threshold, contrast, mode, iterations]);
+
+  const pick = useCallback(async () => {
+    setErr('');
+    setSaved('');
+    try {
+      const res = await launchImageLibrary({ mediaType: 'photo', selectionLimit: 1 });
+      const asset = res.assets?.[0];
+      if (!asset?.uri) return;
+      if ((asset.fileSize ?? 0) > MAX_BYTES) {
+        setErr('图片超过 40MB，换一张小一点的');
         return;
       }
-      task
-        .then((u) => {
-          if (genRef.current === token) {
-            setPreviewUri(u);
-            setErr('');
-          }
-        })
-        .catch((e) => {
-          if (genRef.current === token) setErr('预览生成失败：' + readable(e));
-        })
-        .finally(() => {
-          if (genRef.current === token) setGen(false);
-        });
-    }, 140);
-    return () => clearTimeout(tid);
-  }, [thumb, mode, dark]);
-
-  function pick(target: 'disp' | 'hide') {
-    setErr('');
-    try {
-      launchImageLibrary({ mediaType: 'photo', quality: 1 }, (res) => {
-        if (res.didCancel) return;
-        if (res.errorCode) {
-          setErr('打开相册失败：' + (res.errorMessage || res.errorCode));
-          return;
-        }
-        const a = res.assets?.[0];
-        if (!a?.uri) return;
-        const uri = a.uri;
-        const nm = a.fileName || uri.split('/').pop() || '已选择图片';
-        if (target === 'disp') {
-          setDispUri(uri);
-          setDispName(nm);
-        } else {
-          setHideUri(uri);
-          setHideName(nm);
-        }
-        setFull(null);
-        setThumb(null);
-        setPreviewUri(null);
-        setSaved(false);
-      });
+      setBusy(true);
+      setStage('正在读取图片…');
+      const bytes = await readImageBytes(asset.uri);
+      const raw = fitMax(decodeImage(bytes), MAX_SIDE);
+      setSrc(raw);
     } catch (e: any) {
-      setErr('无法打开相册：' + readable(e));
-    }
-  }
-
-  async function doCompose() {
-    if (!dispUri || !hideUri) {
-      setErr('请先选择显示图与隐藏图');
-      return;
-    }
-    setErr('');
-    setSaved(false);
-    setBusy('正在解码两张图片…');
-    try {
-      const dBytes = await readImageBytes(dispUri);
-      const hBytes = await readImageBytes(hideUri);
-      if (dBytes.length > MAX_BYTES || hBytes.length > MAX_BYTES) throw new Error('图片文件过大，请选择小一点的图片');
-
-      const dRaw = decodeImage(dBytes);
-      const hRaw = decodeImage(hBytes);
-      if (dRaw.width * dRaw.height > MAX_PIXELS || hRaw.width * hRaw.height > MAX_PIXELS)
-        throw new Error('图片分辨率过高，请选择较小的图片');
-
-      setBusy('正在对齐尺寸…');
-      const [w, hh] = fitDims(dRaw.width, dRaw.height);
-      const d = sampleTo(dRaw, w, hh);
-      const h = sampleTo(hRaw, w, hh);
-
-      setBusy('正在合成…');
-      const out = compose(d, h);
-      const set: ImageSet = { out, d, h };
-      setFull(set);
-      // 预览用缩略图：一次生成，后续切换/拖动只在缩略图上运算
-      setThumb({
-        out: downscaleTo(out, PREVIEW_SIDE),
-        d: downscaleTo(d, PREVIEW_SIDE),
-        h: downscaleTo(h, PREVIEW_SIDE),
-      });
-      setMode('composed');
-      setDark(0);
-    } catch (e: any) {
-      setErr(readable(e));
-      setFull(null);
-      setThumb(null);
-      setPreviewUri(null);
+      setErr(e?.message || '无法读取这张图片');
     } finally {
-      setBusy('');
+      setBusy(false);
+      setStage('');
     }
-  }
+  }, []);
 
-  async function save() {
-    if (!full) return;
-    setErr('');
-    setSaved(false);
-    setBusy('正在保存到相册…');
+  const save = async () => {
+    if (!outImg) return;
     try {
-      await savePngToGallery(renderMode(mode, full, dark), 'prism');
-      setSaved(true);
+      setBusy(true);
+      setStage('正在保存 PNG…');
+      await savePngToGallery(outImg, 'prism');
+      setSaved('已保存到相册「工具箱」');
+      setErr('');
     } catch (e: any) {
-      setErr('保存失败：' + readable(e));
+      setErr(e?.message || '保存失败，请检查相册权限');
     } finally {
-      setBusy('');
+      setBusy(false);
+      setStage('');
     }
-  }
+  };
 
   return (
-    <Page id="prism" title="光棱坦克图片" onBack={onBack}>
-      <Card>
-        <SectionTitle text="选择两张图片" style={{ marginTop: 0 }} />
-        <PicSlot
-          index="①"
-          title="显示图"
-          desc="正常看到的画面"
-          icon="image"
-          uri={dispUri}
-          name={dispName}
-          onPick={() => pick('disp')}
-        />
-        <View style={{ height: 10 }} />
-        <PicSlot
-          index="②"
-          title="隐藏图"
-          desc="压暗后浮现的画面"
-          icon="layers"
-          uri={hideUri}
-          name={hideName}
-          onPick={() => pick('hide')}
-        />
-        <Row style={{ marginTop: 14 }}>
-          <Btn text="合成" icon="layers" onPress={doCompose} disabled={!dispUri || !hideUri || !!busy} />
-          {full ? <Btn text="保存到相册" icon="image" kind="soft" onPress={save} disabled={!!busy} /> : null}
-        </Row>
+    <Page id="prism" title="光棱坦克" onBack={onBack} noDetail>
+      <Card pad={13}>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <Btn text={src ? '换一张' : '加载图片'} icon="image" onPress={pick} style={{ flex: 1 }} />
+          <Btn
+            text="保存 PNG"
+            icon="copy"
+            kind="plain"
+            onPress={save}
+            disabled={!outImg}
+            style={{ flex: 1 }}
+          />
+        </View>
         {busy ? (
-          <View style={{ marginTop: 10 }}>
-            <Loading text={busy} />
+          <View style={st.busyRow}>
+            <ActivityIndicator size="small" color={p.primary} />
+            <Text style={[st.busyTxt, { color: p.sub }]}>{stage || '处理中…'}</Text>
           </View>
         ) : null}
         {err ? <Text style={[st.err, { color: p.warn }]}>{err}</Text> : null}
-        {saved && !err ? <Text style={[st.ok, { color: p.ok }]}>已保存到相册「工具箱」</Text> : null}
+        {saved ? (
+          <View style={st.busyRow}>
+            <Icon name="check" size={14} color={p.ok} />
+            <Text style={[st.busyTxt, { color: p.ok }]}>{saved}</Text>
+          </View>
+        ) : null}
       </Card>
 
-      {thumb && full ? (
-        <>
-          <Card>
-            <SectionTitle text="查看效果" style={{ marginTop: 0 }} />
-            <Segmented options={MODES} value={mode} onChange={setMode} />
-            <View style={[st.canvas, { backgroundColor: p.isDark ? '#04060a' : '#0f172a' }]}>
-              {previewUri ? (
-                <Image source={{ uri: previewUri }} style={st.canvasImg} resizeMode="contain" />
-              ) : (
-                <Text style={st.canvasHint}>{gen ? '正在生成预览…' : '暂无预览'}</Text>
-              )}
-            </View>
-            <Text style={[st.hint, { color: p.sub }]}>{MODE_HINT[mode]}</Text>
-            <Slider
-              label="压暗强度（调高后隐藏图浮现）"
-              value={dark}
-              onChange={setDark}
-              min={0}
-              max={100}
-              step={1}
-              format={(v) => `${v}%`}
-              style={{ marginBottom: 2, marginTop: 6 }}
-            />
-          </Card>
+      {/* 画布：只有一张，所见即所得 */}
+      <Card pad={0} style={{ overflow: 'hidden' }}>
+        <View style={[st.canvas, { backgroundColor: p.isDark ? '#0a0a0a' : '#f0f1f3' }]}>
+          {preview ? (
+            <Image source={{ uri: preview }} style={st.img} resizeMode="contain" />
+          ) : (
+            <Tap onPress={pick} style={st.emptyTap}>
+              <Icon name="layers" size={30} color={p.faint} />
+              <Text style={[st.empty, { color: p.sub }]}>加载一张图片开始</Text>
+              <Text style={[st.emptySub, { color: p.faint }]}>
+                近看是噪点，缩小或退远看才会浮现原图
+              </Text>
+            </Tap>
+          )}
+        </View>
+      </Card>
 
-          <Card>
-            <Text style={[st.tip, { color: p.sub }]}>
-              原理：合成图每像素 = √(显示图 × 隐藏图)。直接看是显示图；把截图整体调暗（压暗强度）后隐藏图会浮现。
-              「还原显示图」「还原隐藏图」是用 out² ÷ 另一张图 直接数学反解，用来验证效果。保存按钮保存的是当前模式下
-              的图（含当前压暗强度）。
-            </Text>
-          </Card>
-        </>
-      ) : null}
+      <Card>
+        <Text style={[st.sec, { color: p.text }]}>1. 阈值调整</Text>
+        <Slider
+          value={threshold}
+          min={16}
+          max={240}
+          step={1}
+          onChange={setThreshold}
+          format={(v) => `${Math.round(v)}`}
+          style={{ marginBottom: 4 }}
+        />
+        <Text style={[st.note, { color: p.faint }]}>
+          决定「多亮算亮」。数值越小画面越亮、颗粒越稀；越大越暗、颗粒越密。
+        </Text>
+      </Card>
+
+      <Card>
+        <View style={st.rowBetween}>
+          <Text style={[st.sec, { color: p.text, marginBottom: 0 }]}>2. 对比度调整</Text>
+          <Chip text="重置" icon="refresh" onPress={() => setContrast(1)} />
+        </View>
+        <Slider
+          value={contrast}
+          min={0.3}
+          max={2.6}
+          step={0.05}
+          onChange={setContrast}
+          format={(v) => `${v.toFixed(2)}×`}
+          style={{ marginTop: 8, marginBottom: 2 }}
+        />
+      </Card>
+
+      <Card>
+        <Text style={[st.sec, { color: p.text }]}>3. 其他像素处理方式</Text>
+        <Segmented
+          options={[
+            { label: '标准抖动', value: 'standard' },
+            { label: '临近平均', value: 'average' },
+          ]}
+          value={mode}
+          onChange={(v) => setMode(v as PixelMode)}
+        />
+        <Text style={[st.note, { color: p.faint }]}>
+          {mode === 'standard'
+            ? '标准抖动：颗粒更硬、噪点感更强，适合缩小看。'
+            : '临近平均：阈值取周围平均，明暗过渡更柔，适合大图远看。'}
+        </Text>
+      </Card>
+
+      <Card>
+        <Text style={[st.sec, { color: p.text }]}>4. 扩散迭代次数</Text>
+        <Slider
+          value={iterations}
+          min={0}
+          max={8}
+          step={1}
+          onChange={setIterations}
+          format={(v) => `${Math.round(v)} 次`}
+          style={{ marginBottom: 2 }}
+        />
+        <Text style={[st.note, { color: p.faint }]}>
+          次数越多画面越「散」，细节被摊平，远看时轮廓反而更清楚；0 次保留最多细节。
+        </Text>
+      </Card>
+
+      <Card pad={13}>
+        <Text style={[st.note, { color: p.sub, marginTop: 0 }]}>
+          保存后在相册里把图片缩小、或者把手机拿远眯眼看，隐藏的画面才会浮出来。这就是「光棱坦克」的原理：
+          近处是黑白颗粒，远处的明暗平均值才是原图。
+        </Text>
+      </Card>
     </Page>
   );
 }
 
-/** 选图槽：已选显示缩略图与文件名，未选显示虚线占位 */
-function PicSlot(props: {
-  index: string;
-  title: string;
-  desc: string;
-  icon: 'image' | 'layers';
-  uri: string | null;
-  name: string;
-  onPick: () => void;
-}) {
-  const p = usePalette();
-  return (
-    <Tap onPress={props.onPick} style={[st.slot, { borderColor: p.cardBorder }]}>
-      {props.uri ? (
-        <Image source={{ uri: props.uri }} style={st.slotThumb} />
-      ) : (
-        <View style={[st.slotEmpty, { borderColor: p.line }]}>
-          <Icon name={props.icon} size={20} color={p.faint} />
-        </View>
-      )}
-      <View style={{ flex: 1 }}>
-        <Text style={[st.slotTitle, { color: p.text }]}>
-          {props.index} {props.title}
-        </Text>
-        <Text numberOfLines={1} style={[st.slotDesc, { color: props.uri ? p.sub : p.faint }]}>
-          {props.uri ? props.name : props.desc}
-        </Text>
-      </View>
-      <Icon name={props.uri ? 'refresh' : 'plus'} size={17} color={p.primary} />
-    </Tap>
-  );
-}
-
-const st = dynStyles((C) =>
+const st = dynStyles(() =>
   StyleSheet.create({
-    err: { fontSize: 13, marginTop: 10, lineHeight: 19 },
-    ok: { fontSize: 13, marginTop: 10 },
-    hint: { fontSize: 12, lineHeight: 18, marginTop: 10 },
-    tip: { fontSize: 12, lineHeight: 19 },
-    slot: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      padding: 10,
-      borderRadius: 16,
-      borderWidth: StyleSheet.hairlineWidth,
-      backgroundColor: C.chip,
-    },
-    slotThumb: { width: 52, height: 52, borderRadius: 13, backgroundColor: C.track },
-    slotEmpty: {
-      width: 52,
-      height: 52,
-      borderRadius: 13,
-      borderWidth: 1.4,
-      borderStyle: 'dashed',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    slotTitle: { fontSize: 14, fontWeight: '600' },
-    slotDesc: { fontSize: 12, marginTop: 3 },
     canvas: {
       width: '100%',
-      height: 320,
-      borderRadius: 16,
-      marginTop: 12,
-      overflow: 'hidden',
+      aspectRatio: 1,
       alignItems: 'center',
       justifyContent: 'center',
+      overflow: 'hidden',
     },
-    canvasImg: { width: '100%', height: '100%' },
-    canvasHint: { color: 'rgba(255,255,255,0.6)', fontSize: 13 },
+    img: { width: '100%', height: '100%' },
+    emptyTap: {
+      flex: 1,
+      alignSelf: 'stretch',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 7,
+    },
+    empty: { fontSize: 14.5, fontWeight: '600' },
+    emptySub: { fontSize: 11.5, textAlign: 'center', paddingHorizontal: 24, lineHeight: 17 },
+    sec: { fontSize: 14, fontWeight: '700', marginBottom: 6 },
+    note: { fontSize: 11.5, lineHeight: 17, marginTop: 4 },
+    rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    busyRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 10 },
+    busyTxt: { fontSize: 12.5 },
+    err: { fontSize: 12.5, marginTop: 10, lineHeight: 18 },
   }),
 );

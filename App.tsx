@@ -75,20 +75,29 @@ function Root() {
   const [cat, setCat] = useState<string>('全部');
   const insets = useSafeAreaInsets();
 
-  /* 页面转场：首页 ↔ 工具页各自从缩小的状态淡入，返回时也有动画（不再瞬间切回） */
+  /* 页面转场：首页淡出/缩小的同时工具页滑入 → 两个页面真正交叉过渡，不再是硬切 */
   const nav = useRef(new Animated.Value(0)).current;
-  const homeIn = useRef(new Animated.Value(1)).current;
+  const homeOut = useRef(new Animated.Value(1)).current;
+  const [homeGone, setHomeGone] = useState(false);
 
   const openTool = (id: string) => {
     nav.setValue(0);
-    homeIn.setValue(1);
     setStack(id);
+    Animated.timing(homeOut, {
+      toValue: 0,
+      duration: 240,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) setHomeGone(true);
+    });
   };
 
   const goHome = () => {
-    homeIn.setValue(0);
+    setHomeGone(false);
     setStack(null);
-    Animated.timing(homeIn, {
+    homeOut.setValue(0);
+    Animated.timing(homeOut, {
       toValue: 1,
       duration: 280,
       easing: Easing.out(Easing.cubic),
@@ -145,12 +154,11 @@ function Root() {
       <Animated.View
         style={[
           { flex: 1 },
-          tool ? { display: 'none' } : null,
+          homeGone ? { display: 'none' } : null,
           {
-            opacity: homeIn.interpolate({ inputRange: [0, 1], outputRange: [0.25, 1] }),
+            opacity: homeOut,
             transform: [
-              { scale: homeIn.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) },
-              { translateY: homeIn.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
+              { scale: homeOut.interpolate({ inputRange: [0, 1], outputRange: [1.015, 1] }) },
             ],
           },
         ]}>
@@ -238,14 +246,31 @@ function Root() {
 
 function ThemeButton() {
   const p = usePalette();
-  const { isDark, toggle, setMode, mode } = useTheme();
+  const { isDark, setMode, mode } = useTheme();
+  const ref = useRef<any>(null);
+
+  /** 量出按钮在屏幕上的位置，让换色从这一角向外扩开 */
+  const go = () => {
+    const next = isDark ? 'light' : 'dark';
+    const v: any = ref.current;
+    if (v && typeof v.measureInWindow === 'function') {
+      v.measureInWindow((x: number, y: number, w: number, h: number) =>
+        setMode(next, { x: x + w / 2, y: y + h / 2 }),
+      );
+    } else {
+      setMode(next);
+    }
+  };
+
   return (
-    <RoundButton
-      icon={isDark ? 'moon' : 'sun'}
-      onPress={toggle}
-      onLongPress={() => setMode(mode === 'system' ? (isDark ? 'light' : 'dark') : 'system')}
-      style={{ borderColor: p.cardBorder }}
-    />
+    <View ref={ref} collapsable={false}>
+      <RoundButton
+        icon={isDark ? 'moon' : 'sun'}
+        onPress={go}
+        onLongPress={() => setMode(mode === 'system' ? (isDark ? 'light' : 'dark') : 'system')}
+        style={{ borderColor: p.cardBorder }}
+      />
+    </View>
   );
 }
 

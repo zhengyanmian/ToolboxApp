@@ -199,7 +199,7 @@ export default function ScreenClock({ onBack }: { onBack: () => void }) {
 
   /** 工具条始终用「凝光」玻璃：随时钟底色反色，保证在纯黑/纯白底上都清楚 */
   const darkUi = !light;
-  const glass = darkUi ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.85)';
+  const glass = darkUi ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.92)';
   const glassLine = darkUi ? 'rgba(255,255,255,0.14)' : 'rgba(17,24,39,0.08)';
   const panelBg = darkUi ? 'rgba(16,20,28,0.9)' : 'rgba(255,255,255,0.94)';
   const uiFg = darkUi ? '#eef2f8' : '#1f2937';
@@ -351,17 +351,6 @@ export default function ScreenClock({ onBack }: { onBack: () => void }) {
         ) : null}
 
         <View style={[st.bar, { backgroundColor: glass, borderColor: glassLine }]}>
-          <View
-            pointerEvents="none"
-            style={{
-              position: 'absolute',
-              left: '8%',
-              right: '8%',
-              top: 0,
-              height: StyleSheet.hairlineWidth * 2,
-              backgroundColor: darkUi ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.95)',
-            }}
-          />
           <IconBtn name="chevron" onPress={onBack} dark={darkUi} />
           <IconBtn
             name="rotate"
@@ -418,14 +407,8 @@ function IconBtn(props: {
 }) {
   const p = usePalette();
   const dark = props.dark !== false;
-  const bg = props.active
-    ? dark
-      ? 'rgba(255,255,255,0.24)'
-      : 'rgba(47,107,255,0.16)'
-    : dark
-    ? 'rgba(255,255,255,0.09)'
-    : 'rgba(255,255,255,0.85)';
-  const fg = props.active ? (dark ? '#ffffff' : p.primary) : dark ? '#eef2f8' : '#1f2937';
+  const bg = props.active ? p.primary : dark ? 'rgba(255,255,255,0.10)' : 'rgba(15,23,42,0.06)';
+  const fg = props.active ? p.onPrimary : dark ? '#f2f5fa' : '#111827';
   return (
     <Tap
       onPress={props.onPress}
@@ -434,21 +417,9 @@ function IconBtn(props: {
         st.ibtn,
         {
           backgroundColor: bg,
-          borderColor: dark ? 'rgba(255,255,255,0.13)' : 'rgba(17,24,39,0.08)',
+          borderColor: props.active ? 'transparent' : dark ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.08)',
         },
       ]}>
-      <View
-        pointerEvents="none"
-        style={{
-          position: 'absolute',
-          left: 3,
-          right: 3,
-          top: 0,
-          height: StyleSheet.hairlineWidth * 2,
-          borderRadius: 2,
-          backgroundColor: dark ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.95)',
-        }}
-      />
       {props.dot ? <View style={[st.dot, { backgroundColor: props.dot }]} /> : null}
       <Icon name={props.name} size={18} color={fg} />
     </Tap>

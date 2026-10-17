@@ -13,7 +13,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, dynStyles, usePalette, useTheme } from './theme';
 import { DETAILS } from './details';
@@ -27,33 +27,16 @@ export type { IconName };
 const A_Press = Animated.createAnimatedComponent(Pressable);
 
 /* ------------------------------------------------------------------ */
-/* 背景层：柔和渐变 + 双色光晕（模拟景深，营造玻璃基底）               */
+/* 背景层：纯色（不做渐变、不加光晕）                                   */
+/* ColorOS 的底是干净的，通透感来自留白与灰阶层级，不是背景上的彩色光斑。 */
 /* ------------------------------------------------------------------ */
 export function Background() {
   const p = usePalette();
-  const { width, height } = useWindowDimensions();
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Svg width={width} height={height}>
-        <Defs>
-          <LinearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
-            <Stop offset="0" stopColor={p.bgTop} />
-            <Stop offset="1" stopColor={p.bgBottom} />
-          </LinearGradient>
-          <RadialGradient id="g1" cx="0.1" cy="0.02" r="0.75">
-            <Stop offset="0" stopColor={p.bgGlow} stopOpacity={p.isDark ? 0.55 : 0.75} />
-            <Stop offset="1" stopColor={p.bgGlow} stopOpacity={0} />
-          </RadialGradient>
-          <RadialGradient id="g2" cx="0.95" cy="0.22" r="0.7">
-            <Stop offset="0" stopColor={p.glowB} stopOpacity={p.isDark ? 0.3 : 0.34} />
-            <Stop offset="1" stopColor={p.glowB} stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-        <Rect x={0} y={0} width={width} height={height} fill="url(#bg)" />
-        <Rect x={0} y={0} width={width} height={height} fill="url(#g1)" />
-        <Rect x={0} y={0} width={width} height={height} fill="url(#g2)" />
-      </Svg>
-    </View>
+    <View
+      pointerEvents="none"
+      style={[StyleSheet.absoluteFill, { backgroundColor: p.bg }]}
+    />
   );
 }
 
@@ -286,11 +269,13 @@ export function Tap(props: {
                 ry={pt.r}
                 gradientUnits="userSpaceOnUse">
                 <Stop offset="0" stopColor={color} stopOpacity={p.isDark ? 0.22 : 0.45} />
-                <Stop offset="0.55" stopColor={color} stopOpacity={p.isDark ? 0.07 : 0.15} />
+                <Stop offset="0.45" stopColor={color} stopOpacity={p.isDark ? 0.1 : 0.22} />
+                <Stop offset="0.75" stopColor={color} stopOpacity={p.isDark ? 0.03 : 0.07} />
                 <Stop offset="1" stopColor={color} stopOpacity={0} />
               </RadialGradient>
             </Defs>
-            <Rect x={0} y={0} width="100%" height="100%" fill={`url(#${gid})`} />
+            {/* 用圆而不是矩形：即使渐变渲染异常也不会露出方形边界 */}
+            <Circle cx={pt.x} cy={pt.y} r={pt.r} fill={`url(#${gid})`} />
           </Svg>
         </Animated.View>
       ) : null}
@@ -310,10 +295,12 @@ export function Page(props: {
   contentStyle?: object;
   right?: React.ReactNode;
   plain?: boolean;
+  /** 不要顶部那段用途说明（计算器这类整屏工具用） */
+  noDetail?: boolean;
 }) {
   const p = usePalette();
   const insets = useSafeAreaInsets();
-  const detail = props.id ? DETAILS[props.id] : undefined;
+  const detail = props.id && !props.noDetail ? DETAILS[props.id] : undefined;
 
   // 进场动效：整页轻微上移淡入（只做一次，native 驱动）
   const enter = useRef(new Animated.Value(0)).current;
@@ -337,7 +324,7 @@ export function Page(props: {
             padding: 13,
             marginBottom: 12,
             borderWidth: StyleSheet.hairlineWidth,
-            borderColor: p.primary + '44',
+            borderColor: p.primary + '33',
           }}>
           <Text style={{ fontSize: 12.5, color: p.isDark ? p.sub : '#334155', lineHeight: 20 }}>
             {detail}
@@ -360,34 +347,27 @@ export function Page(props: {
             { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) },
           ],
         }}>
-        {/* 浮岛式导航栏：不贴边、不断线，一颗悬浮的玻璃胶囊 */}
-        <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 12 }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              height: 52,
-              borderRadius: 26,
-              paddingHorizontal: 4,
-              overflow: 'hidden',
-              backgroundColor: p.header,
-              borderWidth: StyleSheet.hairlineWidth,
-              borderColor: p.cardBorder,
-            }}>
-            <GlassLayer radius={26} tone="card" />
-            {props.onBack ? (
-              <Tap onPress={props.onBack} glow style={s.back} hitSlop={10}>
-                <Icon name="chevron" size={21} color={p.text} strokeWidth={2.1} />
-              </Tap>
-            ) : (
-              <View style={s.back} />
-            )}
-            <Text
-              numberOfLines={1}
-              style={{ flex: 1, textAlign: 'center', fontSize: 16.5, fontWeight: '600', color: p.text }}>
-              {props.title}
-            </Text>
-            <View style={s.back}>{props.right}</View>
+        {/* 头部：一颗独立的圆形返回按钮 + 居中的纯文字标题（不再做成一条长条） */}
+        <View
+          style={{
+            paddingTop: insets.top + 8,
+            paddingHorizontal: 14,
+            height: insets.top + 66,
+            flexDirection: 'row',
+            alignItems: 'center',
+          }}>
+          {props.onBack ? (
+            <RoundButton icon="chevron" size={40} onPress={props.onBack} />
+          ) : (
+            <View style={{ width: 40, height: 40 }} />
+          )}
+          <Text
+            numberOfLines={1}
+            style={{ flex: 1, textAlign: 'center', fontSize: 16.5, fontWeight: '600', color: p.text }}>
+            {props.title}
+          </Text>
+          <View style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+            {props.right}
           </View>
         </View>
         {props.scroll === false ? (

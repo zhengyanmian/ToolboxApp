@@ -168,7 +168,7 @@ export const TOOLS: ToolDef[] = [
   { id: 'hoday', name: '历史上的今天', icon: 'book', category: '查询', desc: '大事记速览', component: HistoryToday },
   { id: 'imgcompress', name: '图片压缩', icon: 'image', category: '图片', desc: '压缩改格式', component: ImageCompress },
   { id: 'imgscramble', name: '图片混淆', icon: 'puzzle', category: '图片', desc: '乱序加密还原', component: ImageScramble },
-  { id: 'prism', name: '光棱坦克图片', icon: 'layers', category: '图片', desc: '两图合成暗藏', component: PrismTank },
+  { id: 'prism', name: '光棱坦克图片', icon: 'layers', category: '图片', desc: '单图抖动隐写', component: PrismTank },
   { id: 'picker', name: '取色器', icon: 'dropper', category: '图片', desc: '图上取值', component: ColorPicker },
   { id: 'ncm', name: 'NCM 音乐转换', icon: 'music', category: '音频', desc: '本地转 MP3/FLAC', component: NcmTool },
   { id: 'metal', name: '金属探测仪', icon: 'magnet', category: '设备', desc: '磁力计探测', component: MetalDetector },
